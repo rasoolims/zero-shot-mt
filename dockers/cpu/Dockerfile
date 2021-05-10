@@ -16,14 +16,14 @@ RUN apt update && \
     rm -rf /var/lib/apt/lists
 
 RUN python3 -m pip install --no-cache-dir --upgrade pip
-RUN python3 -m pip install torch==1.4.0
+RUN python3 -m pip install torch==1.8.1
 RUN python3 -m pip install numpy==1.18.2
 RUN python3 -m pip install sacrebleu
 RUN python3 -m pip install future==0.18.2
 RUN python3 -m pip install pillow
 RUN python3 -m pip install torchvision==0.5.0
 RUN python3 -m pip install ipython
-RUN python3 -m pip install transformers==2.9.0
+RUN python3 -m pip install transformers==4.5.1
 RUN python3 -m pip install pandas
 RUN python3 -m pip install pyarrow
 RUN python3 -m pip install fire

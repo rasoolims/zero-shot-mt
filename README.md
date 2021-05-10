@@ -1,17 +1,6 @@
-# "Wikily" Neural Machine Translation Tailored to Cross-Lingual Tasks
+# Zero-shot Machine Translation
 
-This repository contains a collection of _experimental_ neural machine translation and computer vision codes based on Pytorch. Part of this code is used for the the paper ["Wikily" Neural Machine Translation Tailored to Cross-Lingual Tasks](https://arxiv.org/abs/2104.08384). If you use the models or the code, please cite the paper with the following details:
-```bibtex
-@misc{rasooli2021wikily,
-      title={"Wikily" Neural Machine Translation Tailored to Cross-Lingual Tasks}, 
-      author={Mohammad Sadegh Rasooli and Chris Callison-Burch and Derry Tanti Wijaya},
-      year={2021},
-      eprint={2104.08384},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
-}
-```
-We should emphasize that a big portion of this code is still in experimental mode, and any functionality other than what we describe in this README file might not work properly.
+`
 
 # Contents
 - [Installing Dependencies](#installing-dependencies)
@@ -44,8 +33,8 @@ source [PATH]/bin/activate
 
 3. Clone the code
 ```bash 
-git clone https://github.com/rasoolims/ImageTranslate
-cd ImageTranslate/src
+git clone https://github.com/rasoolims/zero-shot-mt
+cd zero-shot-mt/src
 ```
 
 4. Install requirements

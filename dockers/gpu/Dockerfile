@@ -23,7 +23,7 @@ RUN python3 -m pip install future==0.18.2
 RUN python3 -m pip install pillow
 RUN python3 -m pip install torchvision==0.5.0
 RUN python3 -m pip install ipython
-RUN python3 -m pip install transformers==2.9.0
+RUN python3 -m pip install transformers==4.5.1
 RUN python3 -m pip install pandas
 RUN python3 -m pip install pyarrow
 RUN python3 -m pip install fire
