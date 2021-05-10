@@ -3,10 +3,8 @@ from optparse import OptionParser
 
 import torch
 import torch.utils.data as data_utils
-from apex import amp
 
 import dataset
-from parallel import DataParallelModel
 from seq2seq import Seq2Seq
 from seq_gen import BeamDecoder, get_outputs_until_eos
 
@@ -92,9 +90,7 @@ def build_model(options):
                             max_len_b=options.max_len_b, len_penalty_ratio=options.len_penalty_ratio)
     generator.eval()
     if options.fp16:
-        generator = amp.initialize(generator, opt_level="O2")
-    if num_gpu > 1:
-        generator = DataParallelModel(generator)
+        pass  # todo
     return generator, model.text_processor
 
 

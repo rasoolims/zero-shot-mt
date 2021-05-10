@@ -1,12 +1,8 @@
 from optparse import OptionParser
 
 
-def get_lm_option_parser():
+def get_mt_options_parser():
     parser = OptionParser()
-    parser.add_option("--train", dest="train_path", help="Path to the train data pickle files for large data",
-                      metavar="FILE", default=None)
-    parser.add_option("--dev", dest="dev_path", help="Path to the dev data pickle files for large data", metavar="FILE",
-                      default=None)
     parser.add_option("--tok", dest="tokenizer_path", help="Path to the tokenizer folder", metavar="FILE", default=None)
     parser.add_option("--cache_size", dest="cache_size", help="Number of blocks in cache", type="int", default=300)
     parser.add_option("--model", dest="model_path", help="Directory path to save the best model", metavar="FILE",
@@ -25,19 +21,11 @@ def get_lm_option_parser():
                       help="Continue training from pretrained model", default=False)
     parser.add_option("--dropout", dest="dropout", help="Dropout probability", type="float", default=0.1)
     parser.add_option("--dff", dest="d_ff", help="Position-wise feed-forward dimensions", type="int", default=2048)
-    parser.add_option("--reformer", action="store_true", dest="reformer", help="Use Reformer instead of BERT",
-                      default=False)
     parser.add_option("--enc", dest="encoder_layer", help="# encoder layers", type="int", default=6)
     parser.add_option("--embed", dest="embed_dim", help="Embedding dimension", type="int", default=768)
     parser.add_option("--intermediate", dest="intermediate_layer_dim", type="int", default=3072)
     parser.add_option("--local_rank", dest="local_rank", type=int, default=-1)
-    return parser
-
-
-def get_img_options_parser():
-    parser = get_lm_option_parser()
     parser.add_option("--capacity", dest="total_capacity", help="Batch capacity", type="int", default=600)
-    parser.add_option("--lm", dest="lm_path", help="LM pretrained model", metavar="FILE", default=None)
     parser.add_option("--dict", dest="dict_path", help="External lexical dictionary", metavar="FILE", default=None)
     parser.add_option("--beam", dest="beam_width", help="Beam width", type="int", default=5)
     parser.add_option("--bt-beam", dest="bt_beam_width", help="Beam width for back-translation loss", type="int",
@@ -51,20 +39,15 @@ def get_img_options_parser():
                       default=False)
     parser.add_option("--fp16", action="store_true", dest="fp16", default=False)
     parser.set_default("batch", 20000)
-    parser.add_option("--dev_mt", dest="mt_dev_path",
+    parser.add_option("--dev", dest="mt_dev_path",
                       help="Path to the MT dev data pickle files (SHOULD NOT BE USED IN UNSUPERVISED SETTING)",
                       metavar="FILE", default=None)
-    parser.add_option("--train_mt", dest="mt_train_path",
+    parser.add_option("--train", dest="mt_train_path",
                       help="Path to the MT train data pickle files (SHOULD NOT BE USED IN PURELY UNSUPERVISED SETTING)",
                       metavar="FILE", default=None)
     parser.add_option("--fstep", dest="finetune_step", help="Number of finetuneing steps", type="int", default=125000)
     parser.set_default("mask_prob", 0.5)
     parser.add_option("--mass_train", dest="mass_train_path", metavar="FILE", default=None)
-    parser.add_option("--image", dest="image_dir", help="Path to the image files", metavar="FILE", default="")
-    parser.add_option("--img_capacity", dest="img_capacity", help="Batch capacity", type="int", default=50)
-    parser.add_option("--max-image", dest="max_image", help="Maximum number of images in batch", type="int", default=32)
-    parser.add_option("--img-depth", dest="resnet_depth", help="1 (18), 2 (34), 3 (50), 4 (101), 5 (152)", type="int",
-                      default=1)
     parser.add_option("--langs", dest="bt_langs",
                       help="Languages for back-translation (should be two, sepearated by comma)", type="str",
                       default="")
@@ -75,14 +58,7 @@ def get_img_options_parser():
     parser.add_option("--tie", action="store_true", dest="tie_embed", help="Tie encoder and decoder embeddings",
                       default=False)
     parser.add_option("--output", dest="output", help="Output file (for simiality)", metavar="FILE", default=None)
-    parser.add_option("--src-neg", dest="src_neg",
-                      help="Negative sample monolingual file in source language (for simiality)", metavar="FILE",
-                      default=None)
-    parser.add_option("--dst-neg", dest="dst_neg",
-                      help="Negative sample monolingual file in target language (for simiality)", metavar="FILE",
-                      default=None)
     parser.add_option("--save-opt", action="store_true", dest="save_opt", default=False)
-    parser.add_option("--no-obj", action="store_true", dest="no_obj", default=False)
     parser.add_option("--acc", dest="accum", help="Gradient accumulation", type="int", default=1)
     parser.add_option("--mtlw", dest="mtl_weight", help="Update weight for MT in MTL", type="float", default=0.1)
     return parser

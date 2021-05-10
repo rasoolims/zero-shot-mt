@@ -5,7 +5,7 @@ from seq2seq import Seq2Seq, future_mask
 
 class MassSeq2Seq(Seq2Seq):
     def forward(self, src_inputs, tgt_inputs, src_langs, tgt_langs=None, pad_idx: int = 0,
-                tgt_positions=None, log_softmax: bool = False, proposals=None):
+                tgt_positions=None, log_softmax: bool = False):
         """
         :param mask_pad_mask: # Since MASS also generates MASK tokens, we do not backpropagate them during training.
         :return:
@@ -26,7 +26,7 @@ class MassSeq2Seq(Seq2Seq):
 
         if tgt_langs is not None:
             # Use back-translation loss
-            return super().forward(src_inputs=src_inputs, src_mask=src_pads, tgt_inputs=tgt_inputs, proposals=proposals,
+            return super().forward(src_inputs=src_inputs, src_mask=src_pads, tgt_inputs=tgt_inputs,
                                    tgt_mask=tgt_mask, src_langs=src_langs, tgt_langs=tgt_langs, log_softmax=log_softmax)
 
         "Take in and process masked src and target sequences."
@@ -48,8 +48,6 @@ class MassSeq2Seq(Seq2Seq):
                                  encoder_attention_mask=src_pads, tgt_attention_mask=subseq_mask,
                                  position_ids=tgt_positions[:, :-1] if tgt_positions is not None else None,
                                  token_type_ids=tgt_langs[:, :-1])
-        if self.use_proposals:
-            decoder_output = self.attend_proposal(decoder_output, proposals, pad_idx)
         diag_outputs_flat = decoder_output.view(-1, decoder_output.size(-1))
 
         tgt_non_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)

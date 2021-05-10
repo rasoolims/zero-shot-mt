@@ -1,6 +1,6 @@
 import copy
 
-from transformers.modeling_bert import *
+from transformers.models.bert.modeling_bert import *
 
 
 class BertOutputLayer(nn.Module):
