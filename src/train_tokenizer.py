@@ -41,7 +41,7 @@ def get_options():
     global options
     parser = OptionParser()
     parser.add_option("--data", dest="data_path", help="Path to the data folder", metavar="FILE", default=None)
-    parser.add_option("--vocab_size", dest="vocab_size", help="Vocabulary size", type="int", default=30000)
+    parser.add_option("--vocab", dest="vocab_size", help="Vocabulary size", type="int", default=30000)
     parser.add_option("--model", dest="model_path", help="Directory path to save the best model", metavar="FILE",
                       default=None)
     (options, args) = parser.parse_args()

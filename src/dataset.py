@@ -13,49 +13,6 @@ from torch.utils.data import Dataset
 logger = logging.getLogger(__name__)
 
 
-class TextDataset(Dataset):
-    def __init__(self, save_cache_dir: str, max_cache_size: int = 100, load_all: bool = False):
-        """
-        :param save_cache_dir: directory that has saved marshal files for the data.
-        :param max_cache_size: Max number of items in cache
-        """
-
-        self.current_cache: Dict[Dict[int, torch.LongTensor]] = {}
-        self.max_cache_size = max_cache_size
-        self.save_cache_dir = save_cache_dir
-
-        with open(os.path.join(save_cache_dir, "info.txt"), "r") as fr:
-            spl = fr.read().strip().split("\t")
-            self.sentence_block_size = int(spl[0])
-            self.line_num = int(spl[1])
-            self.file_count = int(spl[2])
-
-        if load_all:
-            print("Loading all data at once...")
-            self.rebuild_cache(0, self.file_count)
-            print("Done!")
-
-    def __len__(self):
-        return self.line_num
-
-    def rebuild_cache(self, start_file_num, end_file_num):
-        self.current_cache = {}
-        for file_num in range(start_file_num, end_file_num):
-            with open(os.path.join(self.save_cache_dir, str(file_num)) + ".pkl", "rb") as fp:
-                examples = marshal.load(fp)
-                self.current_cache[file_num] = examples
-
-    def __getitem__(self, item):
-        file_num = math.floor(item / self.sentence_block_size)
-
-        if file_num not in self.current_cache:
-            print("Loading data into cache...")
-            self.rebuild_cache(file_num, min(self.file_count, file_num + self.max_cache_size))
-            print("Loading data into cache done!")
-        examples = self.current_cache[file_num]
-        return examples[item]
-
-
 class MTDataset(Dataset):
     def __init__(self, max_batch_capacity: int, max_batch: int,
                  pad_idx: int, max_seq_len: int = 175, batch_pickle_dir: str = None,
@@ -63,6 +20,7 @@ class MTDataset(Dataset):
                  ngpu=1):
         self.keep_pad_idx = keep_pad_idx
         self.ngpu = ngpu
+
         if examples is None:
             self.build_batches(batch_pickle_dir, max_batch_capacity, max_batch, pad_idx, max_seq_len)
         else:

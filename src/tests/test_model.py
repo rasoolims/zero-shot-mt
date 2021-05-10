@@ -30,28 +30,6 @@ class TestModel(unittest.TestCase):
             sen2 = "Obama signed many landmark bills into law during his first two years in office."
             assert processor._tokenize(sen2) is not None
 
-    def test_data(self):
-        path_dir_name = os.path.dirname(os.path.realpath(__file__))
-        data_path = os.path.join(path_dir_name, "sample.txt")
-
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            processor = TextProcessor()
-            processor.train_tokenizer([data_path], vocab_size=1000, to_save_dir=tmpdirname,
-                                      languages={"<mzn>": 0, "<glk": 1})
-            create_batches.write(text_processor=processor, cache_dir=tmpdirname, seq_len=512, txt_file=data_path,
-                                 sen_block_size=10)
-            dataset = TextDataset(save_cache_dir=tmpdirname, max_cache_size=3)
-            assert dataset.line_num == 70
-
-            dataset.__getitem__(3)
-            assert len(dataset.current_cache) == 3
-
-            dataset.__getitem__(9)
-            assert len(dataset.current_cache) == 3
-
-            dataset.__getitem__(69)
-            assert len(dataset.current_cache) == 2
-
 
 if __name__ == '__main__':
     unittest.main()
