@@ -6,9 +6,6 @@
 - [Installing Dependencies](#installing-dependencies)
   * [Installation using virtualenv](#installation-using-virtualenv)
   * [Installation using dockers](#installation-using-dockers)
-- [Using Pretrained Translation and Captioning Models](#using-pretrained-translation-and-captioning-models)
-  * [Translation](#translation)
-  * [Image Captioning](#image-captioning)
 - [Training a Model](#training-a-model)
   * [Train Machine Translation](#train-machine-translation)
     + [Training MASS Pretraining from Scratch](#training-mass-pretraining-from-scratch)
@@ -73,36 +70,6 @@ docker build dockers/gpu/ -t [docker-name] --no-cache
 ```bash
 docker run --gpus all -it  [docker-name]
 ```
-
-
-# Using Pretrained Translation and Captioning Models
-
-## Translation
-* Download the model zip files for Arabic-English, Romanian-English, Gujarati-English, and Kazakh-English from [this link](https://drive.google.com/drive/folders/10aojSCqlYCunTv9swDCgkcrVkJ6xP4xE?usp=sharing).
-* Unzip the files and use the models for translation.
-    
-```
-unzip ar.zip
-CUDA_VISIBLE_DEVICES=0 python3 -u translate.py --tok ar/tok/ \
---output [output English file] --input [input Arabic file] \
---src en --target ar --beam 4 --model ar/model --capacity 600 --batch 4000     
-```
-
-Here I assumed that I want to translate from Arabic to English. Language abbreviations are ar,en, kk, gu, and ro.
-Note that you can change the GPU id (e.g. CUDA_VISIBLE_DEVICES=1), and change batch and capacity for the best fit of your machine. 
-
-Note that there is a ``--verbose`` option where it puts the input and output lines separated by ``|||``. This is useful especially if you want to use it for back-translation (to make sure that sentence alignments are completely guaranteed), or for annotation projection in which you might need it for word alignment.
-
-## Image Captioning
-There are two Wikily models for image captioning for Arabic in which both have similar qualities. One is multi-tasked with translation and English captioning, and the other only with translation. The zipped model folders are available at [this link](https://drive.google.com/drive/folders/1lH3sp3OFerHQ60gsjOPHHBu-wCjGKGjC?usp=sharing). There are two model folders there. You can try either of them.
-
-```bash
-unzip caption.py
-CUDA_VISIBLE_DEVICES=0 python -u caption.py --input [image-folder] \
---output [output-file] --target ar --tok caption/tok \
---model  caption/caption+mt/   --fp16
-```
-__[image-folder]__ is a folder containing a collection of __jpg__ of __jpeg__ files. Note that you have to specify the target language __ar__ to do proper captioning. The [output-file] will be a tab-separated file with image path as first and caption as second columns.
 
 
 # Training a Model
