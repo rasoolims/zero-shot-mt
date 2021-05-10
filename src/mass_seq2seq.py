@@ -35,7 +35,7 @@ class MassSeq2Seq(Seq2Seq):
         src_langs_t = src_langs.unsqueeze(-1).expand(-1, src_inputs.size(-1))
         src_langs_t = src_langs_t.to(device)
         batch_lang = int(src_langs[0])
-        encoder_states = self.encode(src_inputs, src_pads, src_langs_t)[0]
+        encoder_states = self.encode(src_inputs, src_pads, src_langs_t)
 
         tgt_langs = src_langs.unsqueeze(-1).expand(-1, tgt_inputs.size(-1)).to(device)
         tgt_positions = tgt_positions.to(device)
@@ -44,9 +44,9 @@ class MassSeq2Seq(Seq2Seq):
         output_layer = self.output_layer if not self.lang_dec else self.output_layer[batch_lang]
 
         decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs[:, :-1],
-                                 encoder_attention_mask=src_pads, tgt_attention_mask=subseq_mask,
-                                 position_ids=tgt_positions[:, :-1] if tgt_positions is not None else None,
-                                 token_type_ids=tgt_langs[:, :-1])
+                                      encoder_attention_mask=src_pads, tgt_attention_mask=subseq_mask,
+                                      position_ids=tgt_positions[:, :-1] if tgt_positions is not None else None,
+                                      token_type_ids=tgt_langs[:, :-1])
         diag_outputs_flat = decoder_output.view(-1, decoder_output.size(-1))
 
         tgt_non_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)

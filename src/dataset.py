@@ -2,9 +2,7 @@ import datetime
 import glob
 import logging
 import marshal
-import math
-import os
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -15,19 +13,19 @@ logger = logging.getLogger(__name__)
 
 class MTDataset(Dataset):
     def __init__(self, max_batch_capacity: int, max_batch: int,
-                 pad_idx: int, max_seq_len: int = 175, batch_pickle_dir: str = None,
-                 examples: List[Tuple[torch.tensor, torch.tensor, int, int]] = None, keep_pad_idx=True,
+                 src_pad_idx: int, dst_pad_idx: int, max_seq_len: int = 175, batch_pickle_dir: str = None,
+                 examples: List[Tuple[torch.tensor, torch.tensor, int, int]] = None, keep_src_pad_idx=True,
                  ngpu=1):
-        self.keep_pad_idx = keep_pad_idx
+        self.keep_src_pad_idx = keep_src_pad_idx
         self.ngpu = ngpu
 
         if examples is None:
-            self.build_batches(batch_pickle_dir, max_batch_capacity, max_batch, pad_idx, max_seq_len)
+            self.build_batches(batch_pickle_dir, max_batch_capacity, max_batch, src_pad_idx, dst_pad_idx, max_seq_len)
         else:
-            self.batch_examples(examples, max_batch, max_batch_capacity, max_seq_len, ngpu, pad_idx)
+            self.batch_examples(examples, max_batch, max_batch_capacity, max_seq_len, ngpu, src_pad_idx, dst_pad_idx)
 
     def build_batches(self, batch_pickle_dir: str, max_batch_capacity: int, max_batch: int,
-                      pad_idx: int, max_seq_len: int = 175):
+                      src_pad_idx: int, dst_pad_idx: int, max_seq_len: int = 175):
         """
         Since training is fully-batched and has memory/computational need for cubic power of target length, and quadratic
         power of source length, we need to make sure that each batch has similar length and it does not go over
@@ -37,18 +35,18 @@ class MTDataset(Dataset):
         with open(batch_pickle_dir, "rb") as fr:
             print("LOADING MT BATCHES")
             examples: List[Tuple[torch.tensor, torch.tensor, int, int]] = marshal.load(fr)
-            self.batch_examples(examples, max_batch, max_batch_capacity, max_seq_len, self.ngpu, pad_idx)
+            self.batch_examples(examples, max_batch, max_batch_capacity, max_seq_len, self.ngpu, src_pad_idx,
+                                dst_pad_idx)
 
-    def batch_examples(self, examples, max_batch, max_batch_capacity, max_seq_len, num_gpu, pad_idx):
+    def batch_examples(self, examples, max_batch, max_batch_capacity, max_seq_len, num_gpu, src_pad_idx, dst_pad_idx):
         print("BUILDING MT BATCHES")
         self.batches = []
         cur_src_batch, cur_dst_batch, cur_max_src_len, cur_max_dst_len = [], [], 0, 0
-        cur_src_langs, cur_dst_langs, cur_lex_cand_batch = [], [], []
+        cur_dst_langs, cur_lex_cand_batch = [], []
         for ei, example in enumerate(examples):
             src = torch.LongTensor(example[0][:max_seq_len])  # trim if longer than expected!
             dst = torch.LongTensor(example[1][:max_seq_len])  # trim if longer than expected!
-            cur_src_langs.append(example[2])
-            cur_dst_langs.append(example[3])
+            cur_dst_langs.append(example[2])
             cur_max_src_len = max(cur_max_src_len, int(src.size(0)))
             cur_max_dst_len = max(cur_max_dst_len, int(dst.size(0)))
 
@@ -61,39 +59,37 @@ class MTDataset(Dataset):
 
             if (batch_size > max_batch or batch_capacity_size > max_batch_capacity * 1000000) and \
                     len(cur_src_batch[:-1]) >= num_gpu and len(cur_src_batch) > 1:
-                src_batch = pad_sequence(cur_src_batch[:-1], batch_first=True, padding_value=pad_idx)
-                dst_batch = pad_sequence(cur_dst_batch[:-1], batch_first=True, padding_value=pad_idx)
-                src_pad_mask = (src_batch != pad_idx)
-                dst_pad_mask = (dst_batch != pad_idx)
+                src_batch = pad_sequence(cur_src_batch[:-1], batch_first=True, padding_value=src_pad_idx)
+                dst_batch = pad_sequence(cur_dst_batch[:-1], batch_first=True, padding_value=dst_pad_idx)
+                src_pad_mask = (src_batch != src_pad_idx)
+                dst_pad_mask = (dst_batch != dst_pad_idx)
 
                 entry = {"src_texts": src_batch, "src_pad_mask": src_pad_mask, "dst_texts": dst_batch,
-                         "dst_pad_mask": dst_pad_mask, "src_langs": torch.LongTensor(cur_src_langs[:-1]),
-                         "dst_langs": torch.LongTensor(cur_dst_langs[:-1])}
+                         "dst_pad_mask": dst_pad_mask, "dst_langs": torch.LongTensor(cur_dst_langs[:-1])}
                 self.batches.append(entry)
                 cur_src_batch, cur_dst_batch = [cur_src_batch[-1]], [cur_dst_batch[-1]]
-                cur_src_langs, cur_dst_langs = [cur_src_langs[-1]], [cur_dst_langs[-1]]
+                cur_dst_langs = [cur_dst_langs[-1]]
                 cur_max_src_len, cur_max_dst_len = int(cur_src_batch[0].size(0)), int(cur_dst_batch[0].size(0))
 
             if ei % 1000 == 0:
                 print(ei, "/", len(examples), end="\r")
 
         if len(cur_src_batch) > 0 and len(cur_src_batch) >= num_gpu:
-            src_batch = pad_sequence(cur_src_batch, batch_first=True, padding_value=pad_idx)
-            dst_batch = pad_sequence(cur_dst_batch, batch_first=True, padding_value=pad_idx)
-            src_pad_mask = (src_batch != pad_idx)
-            dst_pad_mask = (dst_batch != pad_idx)
+            src_batch = pad_sequence(cur_src_batch, batch_first=True, padding_value=src_pad_idx)
+            dst_batch = pad_sequence(cur_dst_batch, batch_first=True, padding_value=dst_pad_idx)
+            src_pad_mask = (src_batch != src_pad_idx)
+            dst_pad_mask = (dst_batch != dst_pad_idx)
             entry = {"src_texts": src_batch, "src_pad_mask": src_pad_mask, "dst_texts": dst_batch,
-                     "dst_pad_mask": dst_pad_mask, "src_langs": torch.LongTensor(cur_src_langs),
-                     "dst_langs": torch.LongTensor(cur_dst_langs)}
+                     "dst_pad_mask": dst_pad_mask, "dst_langs": torch.LongTensor(cur_dst_langs)}
             self.batches.append(entry)
 
-        if self.keep_pad_idx:
-            pad_idx_find = lambda non_zeros, sz: (sz - 1) if int(non_zeros.size(0)) == 0 else non_zeros[0]
+        if self.keep_src_pad_idx:
+            src_pad_idx_find = lambda non_zeros, sz: (sz - 1) if int(non_zeros.size(0)) == 0 else non_zeros[0]
             for b in self.batches:
-                pads = b["src_texts"] == pad_idx
+                pads = b["src_texts"] == src_pad_idx
                 sz = int(pads.size(1))
-                pad_indices = torch.LongTensor(list(map(lambda p: pad_idx_find(torch.nonzero(p), sz), pads)))
-                b["pad_idx"] = pad_indices
+                pad_indices = torch.LongTensor(list(map(lambda p: src_pad_idx_find(torch.nonzero(p), sz), pads)))
+                b["src_pad_idx"] = pad_indices
 
         print("\nLoaded %d bitext sentences to %d batches!" % (len(examples), len(self.batches)))
 
@@ -106,15 +102,15 @@ class MTDataset(Dataset):
 
 class MassDataset(Dataset):
     def __init__(self, batch_pickle_dir: str, max_batch_capacity: int, max_batch: int,
-                 pad_idx: int, max_seq_len: int = 512, keep_examples: bool = False, example_list: List = None,
-                 keep_pad_idx=True, ngpu=1):
-        self.keep_pad_idx = keep_pad_idx
+                 src_pad_idx: int, max_seq_len: int = 512, keep_examples: bool = False, example_list: List = None,
+                 keep_src_pad_idx=True, ngpu=1):
+        self.keep_src_pad_idx = keep_src_pad_idx
         self.ngpu = ngpu
         if example_list is None:
-            self.build_batches(batch_pickle_dir, max_batch_capacity, max_batch, pad_idx, max_seq_len, keep_examples)
+            self.build_batches(batch_pickle_dir, max_batch_capacity, max_batch, src_pad_idx, max_seq_len, keep_examples)
         else:
             self.examples_list = example_list
-            self.batch_items(max_batch, max_batch_capacity, max_seq_len, pad_idx)
+            self.batch_items(max_batch, max_batch_capacity, max_seq_len, src_pad_idx)
 
     @staticmethod
     def read_example_file(path):
@@ -124,7 +120,7 @@ class MassDataset(Dataset):
         return examples
 
     def build_batches(self, batch_pickle_dir: str, max_batch_capacity: int, max_batch: int,
-                      pad_idx: int, max_seq_len: int = 175, keep_examples: bool = False):
+                      src_pad_idx: int, max_seq_len: int = 175, keep_examples: bool = False):
         """
         Since training is fully-batched and has memory/computational need for cubic power of target length, and quadratic
         power of source length, we need to make sure that each batch has similar length and it does not go over
@@ -137,11 +133,11 @@ class MassDataset(Dataset):
         self.examples_list = [MassDataset.read_example_file(path) for path in paths]
         print(datetime.datetime.now(), "Done!")
 
-        self.batch_items(max_batch, max_batch_capacity, max_seq_len, pad_idx)
+        self.batch_items(max_batch, max_batch_capacity, max_seq_len, src_pad_idx)
         if not keep_examples:
             self.examples_list = []
 
-    def batch_items(self, max_batch, max_batch_capacity, max_seq_len, pad_idx):
+    def batch_items(self, max_batch, max_batch_capacity, max_seq_len, src_pad_idx):
         print(datetime.datetime.now(), "Building batches")
         self.batches = []
         batches, langs = [], []
@@ -177,14 +173,14 @@ class MassDataset(Dataset):
                 batches.append(cur_src_batch)
                 langs.append(cur_langs)
 
-        pad_idx_find = lambda non_zeros, sz: (sz - 1) if int(non_zeros.size(0)) == 0 else non_zeros[0]
+        src_pad_idx_find = lambda non_zeros, sz: (sz - 1) if int(non_zeros.size(0)) == 0 else non_zeros[0]
         pad_indices = lambda pads: torch.LongTensor(
-            list(map(lambda p: pad_idx_find(torch.nonzero(p), int(pads.size(1))), pads)))
-        padder = lambda b: pad_sequence(b, batch_first=True, padding_value=pad_idx)
+            list(map(lambda p: src_pad_idx_find(torch.nonzero(p), int(pads.size(1))), pads)))
+        padder = lambda b: pad_sequence(b, batch_first=True, padding_value=src_pad_idx)
         tensorfier = lambda b: list(map(torch.LongTensor, b))
         entry = lambda b, l: {"src_texts": padder(tensorfier(b)), "langs": torch.LongTensor(l)}
         pad_entry = lambda e: {"src_texts": e["src_texts"], "langs": e["langs"],
-                               "pad_idx": pad_indices(e["src_texts"] == pad_idx)}
+                               "src_pad_idx": pad_indices(e["src_texts"] == src_pad_idx)}
 
         self.batches = list(map(lambda b, l: pad_entry(entry(b, l)), batches, langs))
 
@@ -200,14 +196,14 @@ class MassDataset(Dataset):
 
 
 class TextCollator(object):
-    def __init__(self, pad_idx):
-        self.pad_idx = pad_idx
+    def __init__(self, src_pad_idx):
+        self.src_pad_idx = src_pad_idx
 
     def __call__(self, batch):
         langs, batch_text = [], []
         for b in batch:
             batch_text.append(torch.LongTensor(b[0]))
             langs.append(b[1])
-        padded_text = pad_sequence(batch_text, batch_first=True, padding_value=self.pad_idx)
-        pad_mask = (padded_text != self.pad_idx)
+        padded_text = pad_sequence(batch_text, batch_first=True, padding_value=self.src_pad_idx)
+        pad_mask = (padded_text != self.src_pad_idx)
         return {"texts": padded_text, "pad_mask": pad_mask, "langs": torch.LongTensor(langs)}

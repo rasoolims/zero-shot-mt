@@ -2,8 +2,6 @@ import os
 import tempfile
 import unittest
 
-import create_batches
-from dataset import TextDataset
 from textprocessor import TextProcessor
 
 

@@ -3,6 +3,7 @@ from optparse import OptionParser
 
 import torch
 import torch.utils.data as data_utils
+from transformers import XLMRobertaTokenizer
 
 import dataset
 from seq2seq import Seq2Seq
@@ -33,7 +34,6 @@ def translate_batch(batch, generator, text_processor, verbose=False):
     src_inputs = batch["src_texts"].squeeze(0)
     src_mask = batch["src_pad_mask"].squeeze(0)
     tgt_inputs = batch["dst_texts"].squeeze(0)
-    src_langs = batch["src_langs"].squeeze(0)
     dst_langs = batch["dst_langs"].squeeze(0)
     src_pad_idx = batch["pad_idx"].squeeze(0)
     src_text = None
@@ -43,7 +43,7 @@ def translate_batch(batch, generator, text_processor, verbose=False):
 
     outputs = generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
                         first_tokens=tgt_inputs[:, 0],
-                        src_mask=src_mask, src_langs=src_langs, tgt_langs=dst_langs,
+                        src_mask=src_mask, tgt_langs=dst_langs,
                         pad_idx=text_processor.pad_token_id())
     if torch.cuda.device_count() > 1:
         new_outputs = []
@@ -55,11 +55,10 @@ def translate_batch(batch, generator, text_processor, verbose=False):
 
 
 def build_data_loader(options, text_processor):
+    tokenizer_class, weights = XLMRobertaTokenizer, 'xlm-roberta-base'
+    xlm_tokenizer = tokenizer_class.from_pretrained(weights)
     print(datetime.datetime.now(), "Binarizing test data")
-    assert options.src_lang is not None
     assert options.target_lang is not None
-    src_lang = "<" + options.src_lang + ">"
-    src_lang_id = text_processor.languages[src_lang]
     dst_lang = "<" + options.target_lang + ">"
     target_lang = text_processor.languages[dst_lang]
     fixed_output = [text_processor.token_id(dst_lang)]
@@ -67,9 +66,8 @@ def build_data_loader(options, text_processor):
     with open(options.input_path, "r") as s_fp:
         for i, src_line in enumerate(s_fp):
             if len(src_line.strip()) == 0: continue
-            src_line = " ".join([src_lang, src_line, "</s>"])
-            src_tok_line = text_processor.tokenize_one_sentence(src_line.strip().replace(" </s> ", " "))
-            examples.append((src_tok_line, fixed_output, src_lang_id, target_lang))
+            src_tok_line = text_processor.xlm_tokenizer.encode(src_line.strip().replace(" </s> ", " "))
+            examples.append((src_tok_line, fixed_output, target_lang))
             if i % 10000 == 0:
                 print(i, end="\r")
     print("\n", datetime.datetime.now(), "Loaded %f examples", (len(examples)))

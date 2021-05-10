@@ -20,8 +20,6 @@ def get_mt_options_parser():
     parser.add_option("--cont", action="store_true", dest="continue_train",
                       help="Continue training from pretrained model", default=False)
     parser.add_option("--dropout", dest="dropout", help="Dropout probability", type="float", default=0.1)
-    parser.add_option("--dff", dest="d_ff", help="Position-wise feed-forward dimensions", type="int", default=2048)
-    parser.add_option("--enc", dest="encoder_layer", help="# encoder layers", type="int", default=6)
     parser.add_option("--embed", dest="embed_dim", help="Embedding dimension", type="int", default=768)
     parser.add_option("--intermediate", dest="intermediate_layer_dim", type="int", default=3072)
     parser.add_option("--local_rank", dest="local_rank", type=int, default=-1)

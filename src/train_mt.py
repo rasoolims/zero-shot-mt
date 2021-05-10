@@ -11,6 +11,7 @@ import torch.utils.data as data_utils
 from IPython.core import ultratb
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
+from transformers import XLMRobertaTokenizer
 
 import dataset
 from loss import SmoothedNLLLoss
@@ -67,7 +68,8 @@ class Trainer:
 
     def train_epoch(self, step: int, saving_path: str = None,
                     mass_data_iter: List[data_utils.DataLoader] = None, mt_dev_iter: List[data_utils.DataLoader] = None,
-                    mt_train_iter: List[data_utils.DataLoader] = None, max_step: int = 300000, accum=1, save_opt: bool = False,
+                    mt_train_iter: List[data_utils.DataLoader] = None, max_step: int = 300000, accum=1,
+                    save_opt: bool = False,
                     **kwargs):
         "Standard Training and Logging Function"
         start = time.time()
@@ -88,13 +90,11 @@ class Trainer:
                         src_mask = batch["src_pad_mask"].squeeze(0)
                         tgt_inputs = batch["dst_texts"].squeeze(0)
                         tgt_mask = batch["dst_pad_mask"].squeeze(0)
-                        src_langs = batch["src_langs"].squeeze(0)
                         dst_langs = batch["dst_langs"].squeeze(0)
                         if src_inputs.size(0) < self.num_gpu:
                             continue
-                        predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs,
-                                                 src_mask=src_mask, tgt_mask=tgt_mask, src_langs=src_langs,
-                                                 tgt_langs=dst_langs, log_softmax=True)
+                        predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
+                                                 tgt_mask=tgt_mask, tgt_langs=dst_langs, log_softmax=True)
                         targets = tgt_inputs[:, 1:].contiguous().view(-1)
                         tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
                         targets = targets[tgt_mask_flat]
@@ -206,9 +206,8 @@ class Trainer:
                     src_inputs = batch["src_texts"].squeeze(0)
                     src_mask = batch["src_pad_mask"].squeeze(0)
                     tgt_inputs = batch["dst_texts"].squeeze(0)
-                    src_langs = batch["src_langs"].squeeze(0)
                     dst_langs = batch["dst_langs"].squeeze(0)
-                    src_pad_idx = batch["pad_idx"].squeeze(0)
+                    src_pad_idx = batch["src_pad_idx"].squeeze(0)
 
                     src_ids = get_outputs_until_eos(model.text_processor.sep_token_id(), src_inputs,
                                                     remove_first_token=True)
@@ -216,7 +215,7 @@ class Trainer:
 
                     outputs = self.generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
                                              first_tokens=tgt_inputs[:, 0],
-                                             src_mask=src_mask, src_langs=src_langs, tgt_langs=dst_langs,
+                                             src_mask=src_mask, tgt_langs=dst_langs,
                                              pad_idx=model.text_processor.pad_token_id())
                     if self.num_gpu > 1 and self.rank < 0:
                         new_outputs = []
@@ -259,14 +258,16 @@ class Trainer:
             os.makedirs(options.model_path)
 
         text_processor = TextProcessor(options.tokenizer_path)
+        tokenizer_class, weights = XLMRobertaTokenizer, 'xlm-roberta-base'
+        xlm_tokenizer = tokenizer_class.from_pretrained(weights)
+
         assert text_processor.pad_token_id() == 0
         num_processors = max(torch.cuda.device_count(), 1) if options.local_rank < 0 else 1
 
         if options.pretrained_path is not None:
             mt_model = Seq2Seq.load(Seq2Seq, options.pretrained_path, tok_dir=options.tokenizer_path)
         else:
-            mt_model = Seq2Seq(text_processor=text_processor,
-                               lang_dec=options.lang_decoder, enc_layer=options.encoder_layer,
+            mt_model = Seq2Seq(text_processor=text_processor, lang_dec=options.lang_decoder,
                                dec_layer=options.decoder_layer, embed_dim=options.embed_dim,
                                intermediate_dim=options.intermediate_layer_dim)
 
@@ -293,14 +294,14 @@ class Trainer:
                                                                              pin_memory,
                                                                              keep_examples=False)
 
-
         mt_train_loader = None
         if options.mt_train_path is not None:
-            mt_train_loader = Trainer.get_mt_train_data(mt_model, num_processors, options, pin_memory)
+            mt_train_loader = Trainer.get_mt_train_data(mt_model, num_processors, options, xlm_tokenizer, pin_memory)
 
         mt_dev_loader = None
         if options.mt_dev_path is not None:
-            mt_dev_loader = Trainer.get_mt_dev_data(mt_model, options, pin_memory, text_processor, trainer)
+            mt_dev_loader = Trainer.get_mt_dev_data(mt_model, options, pin_memory, text_processor, trainer,
+                                                    xlm_tokenizer)
 
         step, train_epoch = 0, 1
         while options.step > 0 and step < options.step:
@@ -312,15 +313,16 @@ class Trainer:
             train_epoch += 1
 
     @staticmethod
-    def get_mt_dev_data(mt_model, options, pin_memory, text_processor, trainer):
+    def get_mt_dev_data(mt_model, options, pin_memory, text_processor, trainer, xlm_tokenizer: XLMRobertaTokenizer):
         mt_dev_loader = []
         dev_paths = options.mt_dev_path.split(",")
         trainer.reference = []
         for dev_path in dev_paths:
             mt_dev_data = dataset.MTDataset(batch_pickle_dir=dev_path,
-                                            max_batch_capacity=options.total_capacity, keep_pad_idx=True,
+                                            max_batch_capacity=options.total_capacity, keep_src_pad_idx=True,
                                             max_batch=int(options.batch / (options.beam_width * 2)),
-                                            pad_idx=mt_model.text_processor.pad_token_id(), )
+                                            src_pad_idx=mt_model.text_processor.pad_token_id(),
+                                            dst_pad_idx=xlm_tokenizer.pad_token_id)
             dl = data_utils.DataLoader(mt_dev_data, batch_size=1, shuffle=False, pin_memory=pin_memory)
             mt_dev_loader.append(dl)
 
@@ -338,15 +340,16 @@ class Trainer:
         return mt_dev_loader
 
     @staticmethod
-    def get_mt_train_data(mt_model, num_processors, options, pin_memory):
+    def get_mt_train_data(mt_model, num_processors, options, xlm_tokenizer: XLMRobertaTokenizer, pin_memory: bool):
         mt_train_loader = []
         train_paths = options.mt_train_path.split(",")
         for train_path in train_paths:
             mt_train_data = dataset.MTDataset(batch_pickle_dir=train_path,
                                               max_batch_capacity=int(num_processors * options.total_capacity / 2),
                                               max_batch=int(num_processors * options.batch / 2),
-                                              pad_idx=mt_model.text_processor.pad_token_id(),
-                                              keep_pad_idx=False)
+                                              src_pad_idx=mt_model.text_processor.pad_token_id(),
+                                              dst_pad_idx=xlm_tokenizer.pad_token_id,
+                                              keep_src_pad_idx=False)
             mtl = data_utils.DataLoader(mt_train_data,
                                         sampler=None if options.local_rank < 0 else DistributedSampler(mt_train_data,
                                                                                                        rank=options.local_rank),
