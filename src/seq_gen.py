@@ -124,12 +124,9 @@ class BeamDecoder(nn.Module):
             else:
                 cur_src_mask = None
 
-            decoder = self.seq2seq_model.decoder if not self.seq2seq_model.lang_dec else self.seq2seq_model.decoder[
-                batch_lang]
-            output_layer = self.seq2seq_model.output_layer if (
-                                                                  not self.seq2seq_model.lang_dec) and self.seq2seq_model.tie_embed else \
-                self.seq2seq_model.output_layer[
-                    batch_lang]
+            decoder = self.seq2seq_model.decoder
+            output_layer = self.seq2seq_model.output_layer if not self.seq2seq_model.lang_dec else \
+                self.seq2seq_model.output_layer[batch_lang]
 
             decoder_states = decoder(encoder_states=enc_states, input_ids=cur_outputs,
                                      encoder_attention_mask=cur_src_mask,
@@ -158,7 +155,7 @@ class BeamDecoder(nn.Module):
                 flat_indices[eos_mask] = pad_idx
 
             if i > 1:
-                beam_indices = indices / output.size(-1)
+                beam_indices = torch.floor_divide(indices, output.size(-1))
                 beam_indices_to_select = torch.stack([beam_indices] * top_beam_outputs.size(-1), dim=2)
                 beam_to_use = top_beam_outputs.gather(1, beam_indices_to_select).view(-1, i)
                 sizes_to_use = cur_size.gather(1, beam_indices).view(-1) if beam_width > 1 else None

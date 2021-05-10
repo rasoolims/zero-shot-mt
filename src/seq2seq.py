@@ -5,10 +5,32 @@ import pickle
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers.configuration_utils import PretrainedConfig
 
-import lm_config
 from bert_seq2seq import BertEncoderModel, BertDecoderModel, BertOutputLayer, BertConfig
 from textprocessor import TextProcessor
+
+
+def decoder_config(vocab_size: int, pad_token_id: int, bos_token_id: int, eos_token_id: int, enc_layer: int = 6,
+                   embed_dim: int = 768, intermediate_dim: int = 3072, num_lang: int = 1) -> PretrainedConfig:
+    config = {
+        "attention_probs_dropout_prob": 0.1,
+        "hidden_act": "gelu",
+        "hidden_dropout_prob": 0.1,
+        "hidden_size": embed_dim,
+        "initializer_range": 0.02,
+        "intermediate_size": intermediate_dim,
+        "max_position_embeddings": 512,
+        "num_attention_heads": 12,
+        "num_hidden_layers": enc_layer,
+        "vocab_size": vocab_size,
+        "pad_token_id": pad_token_id,
+        "bos_token_id": bos_token_id,
+        "eos_token_id": eos_token_id,
+        "is_decoder": True,
+        "type_vocab_size": num_lang,
+    }
+    return BertConfig(**config)
 
 
 def future_mask(tgt_mask):
@@ -18,22 +40,22 @@ def future_mask(tgt_mask):
 
 
 class Seq2Seq(nn.Module):
-    def __init__(self, text_processor: TextProcessor, lang_dec: bool = True, tie_embed=False,
+    def __init__(self, text_processor: TextProcessor, lang_dec: bool = True,
                  enc_layer: int = 6, dec_layer: int = 3, embed_dim: int = 768, intermediate_dim: int = 3072):
         super(Seq2Seq, self).__init__()
         self.text_processor: TextProcessor = text_processor
-        self.config = lm_config.get_config(vocab_size=text_processor.tokenizer.get_vocab_size(),
-                                           pad_token_id=text_processor.pad_token_id(),
-                                           bos_token_id=text_processor.bos_token_id(),
-                                           eos_token_id=text_processor.sep_token_id(),
-                                           enc_layer=enc_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim)
+        self.config = decoder_config(vocab_size=text_processor.tokenizer.get_vocab_size(),
+                                     pad_token_id=text_processor.pad_token_id(),
+                                     bos_token_id=text_processor.bos_token_id(),
+                                     eos_token_id=text_processor.sep_token_id(),
+                                     enc_layer=enc_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim,
+                                     num_lang=len(text_processor.languages))
 
         self.enc_layer = enc_layer
         self.dec_layer = dec_layer
         self.embed_dim = embed_dim
         self.intermediate_dim = intermediate_dim
-        self.config["type_vocab_size"] = len(text_processor.languages)
-        self.config = BertConfig(**self.config)
+
         dec_config = copy.deepcopy(self.config)
         dec_config.add_cross_attention = True
         dec_config.num_hidden_layers = self.dec_layer
@@ -41,40 +63,11 @@ class Seq2Seq(nn.Module):
         self.encoder = BertEncoderModel(self.config)
         self.encoder.init_weights()
         self.lang_dec = lang_dec
-        self.tie_embed = tie_embed
-        if not lang_dec:
-            self.decoder = BertDecoderModel(dec_config)
-            self.encoder._tie_or_clone_weights(self.encoder.embeddings.position_embeddings,
-                                               self.decoder.embeddings.position_embeddings)
-            self.encoder._tie_or_clone_weights(self.encoder.embeddings.token_type_embeddings,
-                                               self.decoder.embeddings.token_type_embeddings)
-            self.encoder._tie_or_clone_weights(self.encoder.embeddings.word_embeddings,
-                                               self.decoder.embeddings.word_embeddings)
-
-            if tie_embed:
-                self.output_layer = BertOutputLayer(dec_config)
-                self.encoder._tie_or_clone_weights(self.output_layer, self.encoder.embeddings.word_embeddings)
-                self.encoder._tie_or_clone_weights(self.encoder.embeddings.position_embeddings,
-                                                   self.decoder.embeddings.position_embeddings)
-                self.decoder._tie_or_clone_weights(self.output_layer, self.decoder.embeddings.word_embeddings)
-            else:
-                self.output_layer = nn.ModuleList([BertOutputLayer(dec_config) for _ in text_processor.languages])
-
-            if len(self.encoder.encoder.layer) == len(self.decoder.decoder.layer):
-                for i in range(len(self.encoder.encoder.layer)):
-                    self.decoder.decoder.layer[i].attention = self.encoder.encoder.layer[i].attention
-
-        else:
-            dec = BertDecoderModel(dec_config)
-            self.decoder = nn.ModuleList([copy.deepcopy(dec) for _ in text_processor.languages])
+        self.decoder = BertDecoderModel(dec_config)
+        if lang_dec:
             self.output_layer = nn.ModuleList([BertOutputLayer(dec_config) for _ in text_processor.languages])
-            for i, dec in enumerate(self.decoder):
-                if tie_embed:
-                    self.encoder._tie_or_clone_weights(self.output_layer[i], self.encoder.embeddings.word_embeddings)
-                    dec.embeddings.position_embeddings = self.encoder.embeddings.position_embeddings
-                dec._tie_or_clone_weights(self.output_layer[i], dec.embeddings.word_embeddings)
-                dec._tie_or_clone_weights(self.encoder.embeddings.token_type_embeddings,
-                                          dec.embeddings.token_type_embeddings)
+        else:
+            self.output_layer = BertOutputLayer(dec_config)
 
     def encode(self, src_inputs, src_mask, src_langs):
         device = self.encoder.embeddings.word_embeddings.weight.device
@@ -106,10 +99,9 @@ class Seq2Seq(nn.Module):
         if subseq_mask.device != tgt_inputs.device:
             subseq_mask = subseq_mask.to(device)
 
-        decoder = self.decoder if not self.lang_dec else self.decoder[batch_lang]
-        output_layer = self.output_layer if (not self.lang_dec) and self.tie_embed else self.output_layer[batch_lang]
+        output_layer = self.output_layer if not self.lang_dec else self.output_layer[batch_lang]
 
-        decoder_output = decoder(encoder_states=encoder_states, input_ids=tgt_inputs[:, :-1],
+        decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs[:, :-1],
                                  encoder_attention_mask=src_mask, tgt_attention_mask=subseq_mask,
                                  token_type_ids=tgt_langs[:, :-1])
         diag_outputs_flat = decoder_output.view(-1, decoder_output.size(-1))
@@ -125,8 +117,7 @@ class Seq2Seq(nn.Module):
             os.makedirs(out_dir)
         with open(os.path.join(out_dir, "mt_config"), "wb") as fp:
             pickle.dump(
-                (self.lang_dec, self.enc_layer, self.dec_layer, self.embed_dim,
-                 self.intermediate_dim, self.tie_embed), fp)
+                (self.lang_dec, self.enc_layer, self.dec_layer, self.embed_dim, self.intermediate_dim), fp)
         try:
             torch.save(self.state_dict(), os.path.join(out_dir, "mt_model.state_dict"))
         except:
@@ -140,9 +131,9 @@ class Seq2Seq(nn.Module):
         text_processor = TextProcessor(tok_model_path=tok_dir)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         with open(os.path.join(out_dir, "mt_config"), "rb") as fp:
-            lang_dec, enc_layer, dec_layer, embed_dim, intermediate_dim, tie_embed = pickle.load(fp)
+            lang_dec, enc_layer, dec_layer, embed_dim, intermediate_dim = pickle.load(fp)
 
-            mt_model = cls(text_processor=text_processor, lang_dec=lang_dec, tie_embed=tie_embed, enc_layer=enc_layer,
+            mt_model = cls(text_processor=text_processor, lang_dec=lang_dec, enc_layer=enc_layer,
                            dec_layer=dec_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim)
 
             mt_model.load_state_dict(torch.load(os.path.join(out_dir, "mt_model.state_dict"), map_location=device),
