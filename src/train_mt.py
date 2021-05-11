@@ -25,7 +25,7 @@ sys.excepthook = ultratb.FormattedTB(mode='Verbose', color_scheme='Linux', call_
 class Trainer:
     def __init__(self, model, mask_prob: float = 0.3, clip: int = 1, optimizer=None,
                  beam_width: int = 5, max_len_a: float = 1.1, max_len_b: int = 5, len_penalty_ratio: float = 0.8,
-                 nll_loss: bool = False, fp16: bool = False, mm_mode="mixed", rank: int = -1):
+                 nll_loss: bool = False, fp16: bool = False, rank: int = -1):
         self.model = model
 
         self.clip = clip
@@ -63,7 +63,6 @@ class Trainer:
 
         self.reference = None
         self.best_bleu = -1.0
-        self.mm_mode = mm_mode
 
     def train_epoch(self, step: int, saving_path: str = None,
                     mass_data_iter: List[data_utils.DataLoader] = None, mt_dev_iter: List[data_utils.DataLoader] = None,
@@ -278,7 +277,7 @@ class Trainer:
         trainer = Trainer(model=mt_model, mask_prob=options.mask_prob, optimizer=optimizer, clip=options.clip,
                           beam_width=options.beam_width, max_len_a=options.max_len_a,
                           max_len_b=options.max_len_b, len_penalty_ratio=options.len_penalty_ratio,
-                          fp16=options.fp16, mm_mode=options.mm_mode, rank=options.local_rank)
+                          fp16=options.fp16, rank=options.local_rank)
 
         pin_memory = torch.cuda.is_available()
 
