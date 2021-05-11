@@ -207,9 +207,8 @@ class Trainer:
                     dst_langs = batch["dst_langs"].squeeze(0)
                     src_pad_idx = batch["src_pad_idx"].squeeze(0)
 
-                    src_ids = get_outputs_until_eos(model.input_tokenizer.eos_token_id, src_inputs,
-                                                    remove_first_token=True)
-                    src_text += list(map(lambda src: model.input_tokenizer.decode(src), src_ids))
+                    src_ids = get_outputs_until_eos(model.src_eos_id(), src_inputs, remove_first_token=True)
+                    src_text += list(map(lambda src: model.decode_src(src), src_ids))
 
                     outputs = self.generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
                                              first_tokens=tgt_inputs[:, 0],
@@ -316,8 +315,8 @@ class Trainer:
             mt_dev_data = dataset.MTDataset(batch_pickle_dir=dev_path,
                                             max_batch_capacity=options.total_capacity, keep_src_pad_idx=True,
                                             max_batch=int(options.batch / (options.beam_width * 2)),
-                                            src_pad_idx=mt_model.text_processor.pad_token_id(),
-                                            dst_pad_idx=mt_model.input_tokenizer.pad_token_id)
+                                            src_pad_idx=mt_model.src_pad_id(),
+                                            dst_pad_idx=mt_model.text_processor.pad_token_id())
             dl = data_utils.DataLoader(mt_dev_data, batch_size=1, shuffle=False, pin_memory=pin_memory)
             mt_dev_loader.append(dl)
 
@@ -342,8 +341,8 @@ class Trainer:
             mt_train_data = dataset.MTDataset(batch_pickle_dir=train_path,
                                               max_batch_capacity=int(num_processors * options.total_capacity / 2),
                                               max_batch=int(num_processors * options.batch / 2),
-                                              src_pad_idx=mt_model.text_processor.pad_token_id(),
-                                              dst_pad_idx=mt_model.input_tokenizer.pad_token_id,
+                                              src_pad_idx=mt_model.src_pad_id(),
+                                              dst_pad_idx=mt_model.text_processor.pad_token_id(),
                                               keep_src_pad_idx=False)
             mtl = data_utils.DataLoader(mt_train_data,
                                         sampler=None if options.local_rank < 0 else DistributedSampler(mt_train_data,
@@ -359,7 +358,7 @@ class Trainer:
             td = dataset.MassDataset(batch_pickle_dir=mass_train_path,
                                      max_batch_capacity=num_processors * options.total_capacity,
                                      max_batch=num_processors * options.batch,
-                                     pad_idx=mt_model.text_processor.pad_token_id(),
+                                     src_pad_idx=mt_model.src_pad_id(),
                                      max_seq_len=options.max_seq_len, keep_examples=keep_examples, )
             mass_train_data.append(td)
 

@@ -8,9 +8,12 @@ from textprocessor import TextProcessor
 
 
 def write(text_processor: TextProcessor, output_file: str, src_txt_file: str, src_lang: int,
-          dst_txt_file: str = None, dst_lang: int = None, min_len: int = 1, max_len: int = 175):
-    tokenizer_class, weights = XLMRobertaTokenizer, 'xlm-roberta-base'
-    xlm_tokenizer = tokenizer_class.from_pretrained(weights)
+          dst_txt_file: str = None, dst_lang: int = None, min_len: int = 1, max_len: int = 175, shallow:bool=False):
+    if not shallow:
+        tokenizer_class, weights = XLMRobertaTokenizer, 'xlm-roberta-base'
+        tokenizer = tokenizer_class.from_pretrained(weights)
+    else:
+        tokenizer = text_processor
 
     examples = {}
     line_num = 0
@@ -21,7 +24,11 @@ def write(text_processor: TextProcessor, output_file: str, src_txt_file: str, sr
         with open(src_txt_file, "r") as s_fp, open(dst_txt_file, "r") as d_fp:
             for src_line, dst_line in zip(s_fp, d_fp):
                 if len(src_line.strip()) == 0 or len(dst_line.strip()) == 0: continue
-                src_tok_line = xlm_tokenizer.encode(src_line.strip())
+                if not shallow:
+                    src_tok_line = tokenizer.encode(src_line.strip())
+                else:
+                    src_tok_line = text_processor.tokenize_one_sentence_with_langid(src_line.strip(), src_lang)
+
                 dst_tok_line = text_processor.tokenize_one_sentence_with_langid(dst_line.strip(), dst_lang)
 
                 if min_len <= len(src_tok_line) <= max_len and min_len <= len(dst_tok_line) <= max_len:
@@ -87,6 +94,8 @@ def get_options():
     parser.add_option("--min_seq_len", dest="min_seq_len", help="Max sequence length", type="int", default=1)
     parser.add_option("--src-lang", dest="src_lang", type="str", default=None)
     parser.add_option("--dst-lang", dest="dst_lang", type="str", default=None)
+    parser.add_option("--shallow", action="store_true", dest="shallow_encoder",
+                      help="Use shallow encoder instead of XLM", default=False)
     (options, args) = parser.parse_args()
     return options
 
@@ -99,5 +108,5 @@ if __name__ == "__main__":
     src_lang = tokenizer.token_id("<" + options.src_lang + ">")
     dst_lang = tokenizer.token_id("<" + options.dst_lang + ">") if options.dst_lang is not None else None
     write(text_processor=tokenizer, output_file=options.output_path, src_txt_file=options.src_data_path,
-          dst_txt_file=options.dst_data_path, src_lang=src_lang, dst_lang=dst_lang)
+          dst_txt_file=options.dst_data_path, src_lang=src_lang, dst_lang=dst_lang, shallow=options.shallow_encoder)
     print(datetime.datetime.now(), "Finished")

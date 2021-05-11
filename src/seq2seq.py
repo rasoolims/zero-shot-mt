@@ -7,9 +7,9 @@ import torch.nn.functional as F
 from transformers import XLMRobertaTokenizer, XLMRobertaModel
 from transformers.configuration_utils import PretrainedConfig
 
-from bert_seq2seq import BertDecoderModel, BertOutputLayer, BertConfig
+from bert_seq2seq import BertDecoderModel,BertEncoderModel, BertOutputLayer, BertConfig
 from textprocessor import TextProcessor
-
+import copy
 
 def decoder_config(vocab_size: int, pad_token_id: int, bos_token_id: int, eos_token_id: int, layer: int = 6,
                    embed_dim: int = 768, intermediate_dim: int = 3072, num_lang: int = 1) -> PretrainedConfig:
@@ -34,7 +34,6 @@ def decoder_config(vocab_size: int, pad_token_id: int, bos_token_id: int, eos_to
     config.add_cross_attention = True
     return config
 
-
 def future_mask(tgt_mask):
     attn_shape = (tgt_mask.size(0), tgt_mask.size(1), tgt_mask.size(1))
     future_mask = torch.triu(torch.ones(attn_shape), diagonal=1).type_as(tgt_mask)
@@ -43,7 +42,7 @@ def future_mask(tgt_mask):
 
 class Seq2Seq(nn.Module):
     def __init__(self, text_processor: TextProcessor, lang_dec: bool = True, dec_layer: int = 3, embed_dim: int = 768,
-                 intermediate_dim: int = 3072, freeze_encoder: bool = False):
+                 intermediate_dim: int = 3072, freeze_encoder: bool = False, shallow_encoder: bool=False):
         super(Seq2Seq, self).__init__()
         self.text_processor: TextProcessor = text_processor
         self.config = decoder_config(vocab_size=text_processor.tokenizer.get_vocab_size(),
@@ -53,9 +52,17 @@ class Seq2Seq(nn.Module):
                                      layer=dec_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim,
                                      num_lang=len(text_processor.languages))
 
-        tokenizer_class, weights, model_class = XLMRobertaTokenizer, 'xlm-roberta-base', XLMRobertaModel
-        self.input_tokenizer = tokenizer_class.from_pretrained(weights)
-        self.encoder = model_class.from_pretrained(weights)
+        self.use_xlm = not shallow_encoder
+        if self.use_xlm:
+            tokenizer_class, weights, model_class = XLMRobertaTokenizer, 'xlm-roberta-base', XLMRobertaModel
+            self.input_tokenizer = tokenizer_class.from_pretrained(weights)
+            self.encoder = model_class.from_pretrained(weights)
+        else:
+            enc_config = copy.deepcopy(self.config)
+            enc_config.add_cross_attention = False
+            enc_config.is_decoder = False
+            self.encoder = BertEncoderModel(self.config)
+
         self.dec_layer = dec_layer
         self.embed_dim = embed_dim
         self.intermediate_dim = intermediate_dim
@@ -67,6 +74,24 @@ class Seq2Seq(nn.Module):
             self.output_layer = nn.ModuleList([BertOutputLayer(self.config) for _ in text_processor.languages])
         else:
             self.output_layer = BertOutputLayer(self.config)
+
+    def src_eos_id(self):
+        if self.use_xlm:
+            return self.input_tokenizer.eos_token_id
+        else:
+            return self.text_processor.sep_token_id()
+
+    def src_pad_id(self):
+        if self.use_xlm:
+            return self.input_tokenizer.pad_token_id
+        else:
+            return self.text_processor.pad_token_id()
+
+    def decode_src(self, src):
+        if self.use_xlm:
+            return self.input_tokenizer.decode(src)
+        else:
+            return self.text_processor.tokenizer.decode(src.numpy())
 
     def encode(self, src_inputs, src_mask):
         device = self.encoder.device

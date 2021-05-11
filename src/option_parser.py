@@ -52,4 +52,6 @@ def get_mt_options_parser():
     parser.add_option("--save-opt", action="store_true", dest="save_opt", default=False)
     parser.add_option("--acc", dest="accum", help="Gradient accumulation", type="int", default=1)
     parser.add_option("--freeze", action="store_true", dest="freeze_encoder", default=False)
+    parser.add_option("--shallow", action="store_true", dest="shallow_encoder",
+                      help="Use shallow encoder instead of XLM", default=False)
     return parser
