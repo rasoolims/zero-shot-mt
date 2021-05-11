@@ -1,11 +1,10 @@
 import os
-import os
 import pickle
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import XLMRobertaModel
+from transformers import XLMRobertaTokenizer, XLMRobertaModel
 from transformers.configuration_utils import PretrainedConfig
 
 from bert_seq2seq import BertDecoderModel, BertOutputLayer, BertConfig
@@ -54,7 +53,8 @@ class Seq2Seq(nn.Module):
                                      layer=dec_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim,
                                      num_lang=len(text_processor.languages))
 
-        weights, model_class = 'xlm-roberta-base', XLMRobertaModel
+        tokenizer_class, weights, model_class = XLMRobertaTokenizer, 'xlm-roberta-base', XLMRobertaModel
+        self.xlm_tokenizer = tokenizer_class.from_pretrained(weights)
         self.encoder = model_class.from_pretrained(weights)
         self.dec_layer = dec_layer
         self.embed_dim = embed_dim
