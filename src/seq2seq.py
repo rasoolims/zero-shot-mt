@@ -42,8 +42,8 @@ def future_mask(tgt_mask):
 
 
 class Seq2Seq(nn.Module):
-    def __init__(self, text_processor: TextProcessor, lang_dec: bool = True,
-                 dec_layer: int = 3, embed_dim: int = 768, intermediate_dim: int = 3072):
+    def __init__(self, text_processor: TextProcessor, lang_dec: bool = True, dec_layer: int = 3, embed_dim: int = 768,
+                 intermediate_dim: int = 3072, freeze_encoder: bool = False):
         super(Seq2Seq, self).__init__()
         self.text_processor: TextProcessor = text_processor
         self.config = decoder_config(vocab_size=text_processor.tokenizer.get_vocab_size(),
@@ -61,6 +61,7 @@ class Seq2Seq(nn.Module):
         self.intermediate_dim = intermediate_dim
         self.lang_dec = lang_dec
         self.decoder = BertDecoderModel(self.config)
+        self.freeze_encoder = freeze_encoder
 
         if lang_dec:
             self.output_layer = nn.ModuleList([BertOutputLayer(self.config) for _ in text_processor.languages])
@@ -72,7 +73,12 @@ class Seq2Seq(nn.Module):
         if src_inputs.device != device:
             src_inputs = src_inputs.to(device)
             src_mask = src_mask.to(device)
-        encoder_states = self.encoder(src_inputs, attention_mask=src_mask)
+        if self.freeze_encoder:
+            with torch.no_grad():
+                encoder_states = self.encoder(src_inputs, attention_mask=src_mask)
+        else:
+            encoder_states = self.encoder(src_inputs, attention_mask=src_mask)
+
         return encoder_states['last_hidden_state']
 
     def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, tgt_langs, log_softmax: bool = False):
@@ -110,7 +116,7 @@ class Seq2Seq(nn.Module):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         with open(os.path.join(out_dir, "mt_config"), "wb") as fp:
-            pickle.dump((self.lang_dec, self.dec_layer, self.embed_dim, self.intermediate_dim), fp)
+            pickle.dump((self.lang_dec, self.dec_layer, self.embed_dim, self.intermediate_dim, self.freeze_encoder), fp)
         try:
             torch.save(self.state_dict(), os.path.join(out_dir, "mt_model.state_dict"))
         except:
@@ -124,7 +130,7 @@ class Seq2Seq(nn.Module):
         text_processor = TextProcessor(tok_model_path=tok_dir)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         with open(os.path.join(out_dir, "mt_config"), "rb") as fp:
-            lang_dec, dec_layer, embed_dim, intermediate_dim = pickle.load(fp)
+            lang_dec, dec_layer, embed_dim, intermediate_dim, freeze_encoder = pickle.load(fp)
 
             mt_model = cls(text_processor=text_processor, lang_dec=lang_dec, dec_layer=dec_layer, embed_dim=embed_dim,
                            intermediate_dim=intermediate_dim)

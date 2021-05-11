@@ -266,7 +266,7 @@ class Trainer:
         else:
             mt_model = Seq2Seq(text_processor=text_processor, lang_dec=options.lang_decoder,
                                dec_layer=options.decoder_layer, embed_dim=options.embed_dim,
-                               intermediate_dim=options.intermediate_layer_dim)
+                               intermediate_dim=options.intermediate_layer_dim, freeze_encoder=options.freeze_encoder)
 
         print("Model initialization done!")
 
