@@ -66,7 +66,7 @@ def build_data_loader(options, text_processor):
     with open(options.input_path, "r") as s_fp:
         for i, src_line in enumerate(s_fp):
             if len(src_line.strip()) == 0: continue
-            src_tok_line = text_processor.xlm_tokenizer.encode(src_line.strip().replace(" </s> ", " "))
+            src_tok_line = xlm_tokenizer.encode(src_line.strip().replace(" </s> ", " "))
             examples.append((src_tok_line, fixed_output, target_lang))
             if i % 10000 == 0:
                 print(i, end="\r")

@@ -54,7 +54,7 @@ class Seq2Seq(nn.Module):
                                      num_lang=len(text_processor.languages))
 
         tokenizer_class, weights, model_class = XLMRobertaTokenizer, 'xlm-roberta-base', XLMRobertaModel
-        self.xlm_tokenizer = tokenizer_class.from_pretrained(weights)
+        self.input_tokenizer = tokenizer_class.from_pretrained(weights)
         self.encoder = model_class.from_pretrained(weights)
         self.dec_layer = dec_layer
         self.embed_dim = embed_dim
