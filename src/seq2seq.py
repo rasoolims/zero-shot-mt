@@ -100,11 +100,11 @@ class Seq2Seq(nn.Module):
             src_mask = src_mask.to(device)
         if self.freeze_encoder:
             with torch.no_grad():
-                encoder_states = self.encoder(src_inputs, attention_mask=src_mask)
+                encoder_states = self.encoder(src_inputs, attention_mask=src_mask)['last_hidden_state']
         else:
             encoder_states = self.encoder(src_inputs, attention_mask=src_mask)
 
-        return encoder_states['last_hidden_state']
+        return encoder_states
 
     def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, tgt_langs, log_softmax: bool = False):
         "Take in and process masked src and target sequences."
