@@ -1,3 +1,4 @@
+import copy
 import os
 import pickle
 
@@ -7,9 +8,9 @@ import torch.nn.functional as F
 from transformers import XLMRobertaTokenizer, XLMRobertaModel
 from transformers.configuration_utils import PretrainedConfig
 
-from bert_seq2seq import BertDecoderModel,BertEncoderModel, BertOutputLayer, BertConfig
+from bert_seq2seq import BertDecoderModel, BertEncoderModel, BertOutputLayer, BertConfig
 from textprocessor import TextProcessor
-import copy
+
 
 def decoder_config(vocab_size: int, pad_token_id: int, bos_token_id: int, eos_token_id: int, layer: int = 6,
                    embed_dim: int = 768, intermediate_dim: int = 3072, num_lang: int = 1) -> PretrainedConfig:
@@ -34,6 +35,7 @@ def decoder_config(vocab_size: int, pad_token_id: int, bos_token_id: int, eos_to
     config.add_cross_attention = True
     return config
 
+
 def future_mask(tgt_mask):
     attn_shape = (tgt_mask.size(0), tgt_mask.size(1), tgt_mask.size(1))
     future_mask = torch.triu(torch.ones(attn_shape), diagonal=1).type_as(tgt_mask)
@@ -42,7 +44,8 @@ def future_mask(tgt_mask):
 
 class Seq2Seq(nn.Module):
     def __init__(self, text_processor: TextProcessor, lang_dec: bool = True, dec_layer: int = 3, embed_dim: int = 768,
-                 intermediate_dim: int = 3072, freeze_encoder: bool = False, shallow_encoder: bool=False):
+                 intermediate_dim: int = 3072, freeze_encoder: bool = False, shallow_encoder: bool = False,
+                 multi_steam: bool = False):
         super(Seq2Seq, self).__init__()
         self.text_processor: TextProcessor = text_processor
         self.config = decoder_config(vocab_size=text_processor.tokenizer.get_vocab_size(),
@@ -52,7 +55,7 @@ class Seq2Seq(nn.Module):
                                      layer=dec_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim,
                                      num_lang=len(text_processor.languages))
 
-        self.multi_stream = False #todo
+        self.multi_stream = multi_steam
         self.use_xlm = not shallow_encoder
         if self.use_xlm:
             tokenizer_class, weights, model_class = XLMRobertaTokenizer, 'xlm-roberta-base', XLMRobertaModel
@@ -113,7 +116,8 @@ class Seq2Seq(nn.Module):
 
         return encoder_states
 
-    def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, tgt_langs, srct_inputs, srct_mask, log_softmax: bool = False):
+    def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, tgt_langs, srct_inputs, srct_mask,
+                log_softmax: bool = False):
         """
         srct_inputs is used in case of multi_stream where srct_inputs is the second stream.
         """
@@ -156,7 +160,8 @@ class Seq2Seq(nn.Module):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         with open(os.path.join(out_dir, "mt_config"), "wb") as fp:
-            pickle.dump((self.lang_dec, self.dec_layer, self.embed_dim, self.intermediate_dim, self.freeze_encoder), fp)
+            pickle.dump((self.lang_dec, self.dec_layer, self.embed_dim, self.intermediate_dim, self.freeze_encoder,
+                         self.multi_stream), fp)
         try:
             torch.save(self.state_dict(), os.path.join(out_dir, "mt_model.state_dict"))
         except:
@@ -170,10 +175,10 @@ class Seq2Seq(nn.Module):
         text_processor = TextProcessor(tok_model_path=tok_dir)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         with open(os.path.join(out_dir, "mt_config"), "rb") as fp:
-            lang_dec, dec_layer, embed_dim, intermediate_dim, freeze_encoder = pickle.load(fp)
+            lang_dec, dec_layer, embed_dim, intermediate_dim, freeze_encoder, multi_stream = pickle.load(fp)
 
             mt_model = cls(text_processor=text_processor, lang_dec=lang_dec, dec_layer=dec_layer, embed_dim=embed_dim,
-                           intermediate_dim=intermediate_dim)
+                           intermediate_dim=intermediate_dim, multi_stream=multi_stream)
 
             mt_model.load_state_dict(torch.load(os.path.join(out_dir, "mt_model.state_dict"), map_location=device),
                                      strict=False)

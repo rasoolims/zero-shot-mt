@@ -54,4 +54,6 @@ def get_mt_options_parser():
     parser.add_option("--freeze", action="store_true", dest="freeze_encoder", default=False)
     parser.add_option("--shallow", action="store_true", dest="shallow_encoder",
                       help="Use shallow encoder instead of XLM", default=False)
+    parser.add_option("--multi", action="store_true", dest="multi_stream",
+                      help="Using multi-stream model (the batches should be built via multi-stream)", default=False)
     return parser
