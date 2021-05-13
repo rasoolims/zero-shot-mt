@@ -44,14 +44,10 @@ class BeamDecoder(nn.Module):
         return length_penalty.unsqueeze(-1)
 
     def forward(self, src_inputs=None, src_sizes=None, first_tokens=None, src_mask=None, tgt_langs=None,
-                pad_idx=None, max_len: int = None, unpad_output: bool = True, beam_width: int = None):
+                pad_idx=None, max_len: int = None, unpad_output: bool = True, beam_width: int = None,
+                srct_inputs=None, srct_mask=None):
         """
-
-        :param device:
-        :param src_inputs:
-        :param first_tokens: First token that is language identifier
-        :param src_mask:
-        :return:
+        srct_inputs is used in case of multi_stream where srct_inputs is the second stream.
         """
         if isinstance(tgt_langs, list):
             assert len(tgt_langs) == 1
@@ -62,6 +58,8 @@ class BeamDecoder(nn.Module):
             src_mask = src_mask[0]
             src_sizes = src_sizes[0]
             src_inputs = src_inputs[0]
+            srct_inputs = src_inputs[0]
+            srct_mask = srct_mask[0]
 
         if beam_width is None:
             beam_width = self.beam_width
@@ -70,7 +68,7 @@ class BeamDecoder(nn.Module):
         batch_size = src_inputs.size(0)
         src_mask = src_mask.to(device)
 
-        encoder_states = self.seq2seq_model.encode(src_inputs, src_mask)
+        encoder_states = self.seq2seq_model.encode(src_inputs, src_mask, srct_inputs, srct_mask)
         eos = self.seq2seq_model.text_processor.sep_token_id()
 
         first_position_output = first_tokens.unsqueeze(1).to(device)

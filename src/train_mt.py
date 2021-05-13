@@ -89,9 +89,15 @@ class Trainer:
                         tgt_inputs = batch["dst_texts"].squeeze(0)
                         tgt_mask = batch["dst_pad_mask"].squeeze(0)
                         dst_langs = batch["dst_langs"].squeeze(0)
+
+                        # Second stream of data in case of multi-stream processing.
+                        srct_inputs = batch["srct_texts"].squeeze(0)
+                        srct_mask = batch["srct_pad_mask"].squeeze(0)
+
                         if src_inputs.size(0) < self.num_gpu:
                             continue
                         predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
+                                                 srct_inputs=srct_inputs, srct_mask=srct_mask,
                                                  tgt_mask=tgt_mask, tgt_langs=dst_langs, log_softmax=True)
                         targets = tgt_inputs[:, 1:].contiguous().view(-1)
                         tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
@@ -207,12 +213,16 @@ class Trainer:
                     dst_langs = batch["dst_langs"].squeeze(0)
                     src_pad_idx = batch["src_pad_idx"].squeeze(0)
 
+                    # Second stream of data in case of multi-stream processing.
+                    srct_inputs = batch["srct_texts"].squeeze(0)
+                    srct_mask = batch["srct_pad_mask"].squeeze(0)
+
                     src_ids = get_outputs_until_eos(model.src_eos_id(), src_inputs, remove_first_token=True)
                     src_text += list(map(lambda src: model.decode_src(src), src_ids))
 
                     outputs = self.generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
-                                             first_tokens=tgt_inputs[:, 0],
-                                             src_mask=src_mask, tgt_langs=dst_langs,
+                                             first_tokens=tgt_inputs[:, 0], srct_inputs=srct_inputs,
+                                             src_mask=src_mask, srct_mask=srct_mask, tgt_langs=dst_langs,
                                              pad_idx=model.text_processor.pad_token_id())
                     if self.num_gpu > 1 and self.rank < 0:
                         new_outputs = []

@@ -52,6 +52,7 @@ class Seq2Seq(nn.Module):
                                      layer=dec_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim,
                                      num_lang=len(text_processor.languages))
 
+        self.multi_stream = False #todo
         self.use_xlm = not shallow_encoder
         if self.use_xlm:
             tokenizer_class, weights, model_class = XLMRobertaTokenizer, 'xlm-roberta-base', XLMRobertaModel
@@ -93,7 +94,10 @@ class Seq2Seq(nn.Module):
         else:
             return self.text_processor.tokenizer.decode(src.numpy())
 
-    def encode(self, src_inputs, src_mask):
+    def encode(self, src_inputs, src_mask, srct_inputs, srct_mask):
+        """
+        srct_inputs is used in case of multi_stream where srct_inputs is the second stream.
+        """
         device = self.encoder.device
         if src_inputs.device != device:
             src_inputs = src_inputs.to(device)
@@ -109,7 +113,10 @@ class Seq2Seq(nn.Module):
 
         return encoder_states
 
-    def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, tgt_langs, log_softmax: bool = False):
+    def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, tgt_langs, srct_inputs, srct_mask, log_softmax: bool = False):
+        """
+        srct_inputs is used in case of multi_stream where srct_inputs is the second stream.
+        """
         "Take in and process masked src and target sequences."
         device = self.encoder.embeddings.word_embeddings.weight.device
         batch_lang = int(tgt_langs[0])
@@ -121,7 +128,12 @@ class Seq2Seq(nn.Module):
         if src_mask.device != device:
             src_mask = src_mask.to(device)
 
-        encoder_states = self.encode(src_inputs, src_mask)
+        if self.multi_stream and srct_inputs.device != device:
+            srct_inputs = srct_inputs.to(device)
+        if self.multi_stream and srct_mask.device != device:
+            srct_mask = srct_mask.to(device)
+
+        encoder_states = self.encode(src_inputs, src_mask, srct_inputs=srct_inputs, srct_mask=srct_mask)
 
         subseq_mask = future_mask(tgt_mask[:, :-1])
         if subseq_mask.device != tgt_inputs.device:
