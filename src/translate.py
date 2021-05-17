@@ -13,6 +13,7 @@ from seq_gen import BeamDecoder, get_outputs_until_eos
 def get_lm_option_parser():
     parser = OptionParser()
     parser.add_option("--input", dest="input_path", metavar="FILE", default=None)
+    parser.add_option("--input2", dest="second_input_path", metavar="FILE", default=None)
     parser.add_option("--src", dest="src_lang", type="str", default=None)
     parser.add_option("--target", dest="target_lang", type="str", default=None)
     parser.add_option("--output", dest="output_path", metavar="FILE", default=None)
@@ -27,21 +28,26 @@ def get_lm_option_parser():
     parser.add_option("--len-penalty", dest="len_penalty_ratio", help="Length penalty", type="float", default=0.8)
     parser.add_option("--capacity", dest="total_capacity", help="Batch capacity", type="int", default=600)
     parser.add_option("--fp16", action="store_true", dest="fp16", default=False)
+    parser.add_option("--shallow", action="store_true", dest="shallow", default=False)
+    parser.add_option("--multi", action="store_true", dest="multi_stream", default=False)
     return parser
 
 
 def translate_batch(batch, generator, text_processor, verbose=False):
     src_inputs = batch["src_texts"].squeeze(0)
     src_mask = batch["src_pad_mask"].squeeze(0)
+    srct_inputs = batch["srct_texts"].squeeze(0)
+    srct_mask = batch["srct_pad_mask"].squeeze(0)
     tgt_inputs = batch["dst_texts"].squeeze(0)
     dst_langs = batch["dst_langs"].squeeze(0)
-    src_pad_idx = batch["pad_idx"].squeeze(0)
+    src_pad_idx = batch["src_pad_idx"].squeeze(0)
     src_text = None
     if verbose:
-        src_ids = get_outputs_until_eos(text_processor.sep_token_id(), src_inputs, remove_first_token=True)
-        src_text = list(map(lambda src: text_processor.tokenizer.decode(src.numpy()), src_ids))
+        src_ids = get_outputs_until_eos(generator.seq2seq_model.src_eos_id(), src_inputs, remove_first_token=True)
+        src_text = list(map(lambda src: generator.seq2seq_model.decode_src(src), src_ids))
 
     outputs = generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
+                        srct_inputs=srct_inputs, srct_mask=srct_mask,
                         first_tokens=tgt_inputs[:, 0],
                         src_mask=src_mask, tgt_langs=dst_langs,
                         pad_idx=text_processor.pad_token_id())
@@ -55,24 +61,47 @@ def translate_batch(batch, generator, text_processor, verbose=False):
 
 
 def build_data_loader(options, text_processor):
-    tokenizer_class, weights = XLMRobertaTokenizer, 'xlm-roberta-base'
-    xlm_tokenizer = tokenizer_class.from_pretrained(weights)
+    if not options.shallow:
+        tokenizer_class, weights = XLMRobertaTokenizer, 'xlm-roberta-base'
+        input_tokenizer = tokenizer_class.from_pretrained(weights)
+    else:
+        input_tokenizer = text_processor
+
     print(datetime.datetime.now(), "Binarizing test data")
     assert options.target_lang is not None
     dst_lang = "<" + options.target_lang + ">"
     target_lang = text_processor.languages[dst_lang]
     fixed_output = [text_processor.token_id(dst_lang)]
     examples = []
-    with open(options.input_path, "r") as s_fp:
-        for i, src_line in enumerate(s_fp):
-            if len(src_line.strip()) == 0: continue
-            src_tok_line = xlm_tokenizer.encode(src_line.strip().replace(" </s> ", " "))
-            examples.append((src_tok_line, fixed_output, target_lang))
-            if i % 10000 == 0:
-                print(i, end="\r")
+    if options.multi_stream:
+        with open(options.input_path, "r") as s_fp, open(options.second_input_path, "r") as s2_fp:
+            for i, (src_line, srct_line) in enumerate(zip(s_fp, s2_fp)):
+                if len(src_line.strip()) == 0: continue
+                if not options.shallow:
+                    src_tok_line = input_tokenizer.encode(src_line.strip().replace(" </s> ", " "))
+                else:
+                    src_tok_line = text_processor.tokenize_one_sentence(src_line.strip().replace(" </s> ", " "))
+                srct_tok_line = text_processor.tokenize_one_sentence(srct_line.strip().replace(" </s> ", " "))
+
+                examples.append((src_tok_line, fixed_output, target_lang, srct_tok_line))
+                if i % 10000 == 0:
+                    print(i, end="\r")
+    else:
+        with open(options.input_path, "r") as s_fp:
+            for i, src_line in enumerate(s_fp):
+                if len(src_line.strip()) == 0: continue
+                if not options.shallow:
+                    src_tok_line = input_tokenizer.encode(src_line.strip().replace(" </s> ", " "))
+                else:
+                    src_tok_line = text_processor.tokenize_one_sentence(src_line.strip().replace(" </s> ", " "))
+
+                examples.append((src_tok_line, fixed_output, target_lang, src_tok_line))
+                if i % 10000 == 0:
+                    print(i, end="\r")
     print("\n", datetime.datetime.now(), "Loaded %f examples", (len(examples)))
     test_data = dataset.MTDataset(examples=examples, max_batch_capacity=options.total_capacity, max_batch=options.batch,
-                                  src_pad_idx=text_processor.pad_token_id(), dst_pad_idx=xlm_tokenizer.pad_token_id,
+                                  src_pad_idx=text_processor.pad_token_id(),
+                                  dst_pad_idx=text_processor.pad_token_id() if options.shallow else input_tokenizer.pad_token_id,
                                   max_seq_len=10000)
     pin_memory = torch.cuda.is_available()
     examples = None  # Make sure it gets collected
