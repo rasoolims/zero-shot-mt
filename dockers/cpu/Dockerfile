@@ -41,11 +41,11 @@ ENV LANG C.UTF-8
 RUN echo 'alias python="python3"' >> ~/.bashrc
 
 RUN cd /root
-RUN git clone https://github.com/rasoolims/ImageTranslate
+RUN git clone https://github.com/rasoolims/zero-shot-mt
 
-WORKDIR /root/ImageTranslate/
+WORKDIR /root/zero-shot-mt/
 
-COPY dataset_prep /root/ImageTranslate/dataset_prep
-COPY mt_pret /root/ImageTranslate/mt_pret
+COPY dataset_prep /root/zero-shot-mt/dataset_prep
+COPY mt_pret /root/zero-shot-mt/mt_pret
 
 CMD ["/bin/bash"]

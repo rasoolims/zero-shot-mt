@@ -42,11 +42,11 @@ ENV LANG C.UTF-8
 RUN echo 'alias python="python3"' >> ~/.bashrc
 
 RUN cd /root
-RUN git clone https://github.com/rasoolims/ImageTranslate
+RUN git clone https://github.com/rasoolims/zero-shot-mt
 
-WORKDIR /root/ImageTranslate/
-COPY dataset_prep /root/ImageTranslate/dataset_prep
-COPY mt_pret /root/ImageTranslate/mt_pret
+WORKDIR /root/zero-shot-mt/
+COPY dataset_prep /root/zero-shot-mt/dataset_prep
+COPY mt_pret /root/zero-shot-mt/mt_pret
 
 WORKDIR /root/
 # uninstall Apex if present, twice to make absolutely sure :)
@@ -58,6 +58,6 @@ RUN SHA=ToUcHMe git clone https://github.com/NVIDIA/apex.git
 WORKDIR /root/apex/
 RUN python3 -m pip install --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" pytorch-extension
 
-WORKDIR /root/ImageTranslate/
+WORKDIR /root/zero-shot-mt/
 
 CMD ["/bin/bash"]
