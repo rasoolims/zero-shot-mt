@@ -81,26 +81,11 @@ def mass_unmask(src_text, src_mask, masked_ids):
     src_text[src_mask] = masked_ids
 
 
-def backward(loss, optimizer, fp16: bool = False):
-    if fp16 and torch.cuda.device_count() == 1:
-        # with amp.scale_loss(loss, optimizer) as scaled_loss:
-        #     scaled_loss.backward()
-        loss.backward()
-        pass  # todo
-    else:
-        loss.backward()
-
-
 def init_distributed(options):
     if options.local_rank >= 0:
         os.environ['WORLD_SIZE'] = str(torch.cuda.device_count())
         torch.distributed.init_process_group(backend='nccl', world_size=torch.cuda.device_count(),
                                              rank=options.local_rank)
-
-
-def cleanup_distributed(options):
-    if options.fp16:
-        torch.distributed.destroy_process_group()
 
 
 class AdamInverseSqrtWithWarmup(optim.Adam):

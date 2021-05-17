@@ -3,6 +3,7 @@ from optparse import OptionParser
 
 import torch
 import torch.utils.data as data_utils
+from torch.cuda.amp import autocast
 from transformers import XLMRobertaTokenizer
 
 import dataset
@@ -27,7 +28,6 @@ def get_lm_option_parser():
     parser.add_option("--max_len_b", dest="max_len_b", help="b for beam search (a*l+b)", type="int", default=5)
     parser.add_option("--len-penalty", dest="len_penalty_ratio", help="Length penalty", type="float", default=0.8)
     parser.add_option("--capacity", dest="total_capacity", help="Batch capacity", type="int", default=600)
-    parser.add_option("--fp16", action="store_true", dest="fp16", default=False)
     parser.add_option("--shallow", action="store_true", dest="shallow", default=False)
     parser.add_option("--multi", action="store_true", dest="multi_stream", default=False)
     return parser
@@ -46,11 +46,12 @@ def translate_batch(batch, generator, text_processor, verbose=False):
         src_ids = get_outputs_until_eos(generator.seq2seq_model.src_eos_id(), src_inputs, remove_first_token=True)
         src_text = list(map(lambda src: generator.seq2seq_model.decode_src(src), src_ids))
 
-    outputs = generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
-                        srct_inputs=srct_inputs, srct_mask=srct_mask,
-                        first_tokens=tgt_inputs[:, 0],
-                        src_mask=src_mask, tgt_langs=dst_langs,
-                        pad_idx=text_processor.pad_token_id())
+    with autocast:
+        outputs = generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
+                            srct_inputs=srct_inputs, srct_mask=srct_mask,
+                            first_tokens=tgt_inputs[:, 0],
+                            src_mask=src_mask, tgt_langs=dst_langs,
+                            pad_idx=text_processor.pad_token_id())
     if torch.cuda.device_count() > 1:
         new_outputs = []
         for output in outputs:
@@ -117,8 +118,6 @@ def build_model(options):
     generator = BeamDecoder(model, beam_width=options.beam_width, max_len_a=options.max_len_a,
                             max_len_b=options.max_len_b, len_penalty_ratio=options.len_penalty_ratio)
     generator.eval()
-    if options.fp16:
-        pass  # todo
     return generator, model.text_processor
 
 

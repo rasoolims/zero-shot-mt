@@ -33,7 +33,7 @@ class BertDecoderModel(BertPreTrainedModel):
         # /transformer/transformer_layers.py#L270
         # encoder_extended_attention_mask = (encoder_extended_attention_mask ==
         # encoder_extended_attention_mask.transpose(-1, -2))
-        encoder_extended_attention_mask = encoder_extended_attention_mask.to(dtype=self.dtype)  # fp16 compatibility
+        encoder_extended_attention_mask = encoder_extended_attention_mask.to(dtype=self.dtype)
         encoder_extended_attention_mask = (1.0 - encoder_extended_attention_mask) * -10000.0
         return encoder_extended_attention_mask
 

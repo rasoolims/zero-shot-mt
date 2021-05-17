@@ -35,7 +35,6 @@ def get_mt_options_parser():
     parser.add_option("--ldec", action="store_true", dest="lang_decoder", help="Lang-specific decoder", default=False)
     parser.add_option("--nll", action="store_true", dest="nll_loss", help="Use NLL loss instead of smoothed NLL loss",
                       default=False)
-    parser.add_option("--fp16", action="store_true", dest="fp16", default=False)
     parser.set_default("batch", 20000)
     parser.add_option("--dev", dest="mt_dev_path",
                       help="Path to the MT dev data pickle files (SHOULD NOT BE USED IN UNSUPERVISED SETTING)",

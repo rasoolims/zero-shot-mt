@@ -9,6 +9,7 @@ import sacrebleu
 import torch.nn as nn
 import torch.utils.data as data_utils
 from IPython.core import ultratb
+from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 
@@ -25,7 +26,7 @@ sys.excepthook = ultratb.FormattedTB(mode='Verbose', color_scheme='Linux', call_
 class Trainer:
     def __init__(self, model, mask_prob: float = 0.3, clip: int = 1, optimizer=None,
                  beam_width: int = 5, max_len_a: float = 1.1, max_len_b: int = 5, len_penalty_ratio: float = 0.8,
-                 nll_loss: bool = False, fp16: bool = False, rank: int = -1):
+                 nll_loss: bool = False, rank: int = -1):
         self.model = model
 
         self.clip = clip
@@ -41,17 +42,13 @@ class Trainer:
             self.criterion = SmoothedNLLLoss(ignore_index=model.text_processor.pad_token_id())
 
         self.num_gpu = torch.cuda.device_count()
-        self.fp16 = False
         self.rank = rank
         if rank >= 0:
             self.device = torch.device('cuda', rank)
             torch.cuda.set_device(self.device)
 
         self.model = self.model.to(self.device)
-
-        if fp16:
-            # todo
-            self.fp16 = True
+        self.scaler = GradScaler()
 
         self.generator = BeamDecoder(self.model, beam_width=beam_width, max_len_a=max_len_a, max_len_b=max_len_b,
                                      len_penalty_ratio=len_penalty_ratio)
@@ -83,87 +80,88 @@ class Trainer:
             for batch in batches:
                 is_mass_batch = "dst_texts" not in batch
                 try:
-                    if not is_mass_batch:  # MT data
-                        src_inputs = batch["src_texts"].squeeze(0)
-                        src_mask = batch["src_pad_mask"].squeeze(0)
-                        tgt_inputs = batch["dst_texts"].squeeze(0)
-                        tgt_mask = batch["dst_pad_mask"].squeeze(0)
-                        dst_langs = batch["dst_langs"].squeeze(0)
+                    with autocast():
+                        if not is_mass_batch:  # MT data
+                            src_inputs = batch["src_texts"].squeeze(0)
+                            src_mask = batch["src_pad_mask"].squeeze(0)
+                            tgt_inputs = batch["dst_texts"].squeeze(0)
+                            tgt_mask = batch["dst_pad_mask"].squeeze(0)
+                            dst_langs = batch["dst_langs"].squeeze(0)
 
-                        # Second stream of data in case of multi-stream processing.
-                        srct_inputs = batch["srct_texts"].squeeze(0)
-                        srct_mask = batch["srct_pad_mask"].squeeze(0)
+                            # Second stream of data in case of multi-stream processing.
+                            srct_inputs = batch["srct_texts"].squeeze(0)
+                            srct_mask = batch["srct_pad_mask"].squeeze(0)
 
-                        if src_inputs.size(0) < self.num_gpu:
-                            continue
-                        predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
-                                                 srct_inputs=srct_inputs, srct_mask=srct_mask,
-                                                 tgt_mask=tgt_mask, tgt_langs=dst_langs, log_softmax=True)
-                        targets = tgt_inputs[:, 1:].contiguous().view(-1)
-                        tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
-                        targets = targets[tgt_mask_flat]
-                        ntokens = targets.size(0)
-                    else:  # MASS data
-                        src_inputs = batch["src_texts"].squeeze(0)
-                        pad_indices = batch["pad_idx"].squeeze(0)
-                        if src_inputs.size(0) < self.num_gpu:
-                            continue
+                            if src_inputs.size(0) < self.num_gpu:
+                                continue
+                            predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
+                                                     srct_inputs=srct_inputs, srct_mask=srct_mask,
+                                                     tgt_mask=tgt_mask, tgt_langs=dst_langs, log_softmax=True)
+                            targets = tgt_inputs[:, 1:].contiguous().view(-1)
+                            tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
+                            targets = targets[tgt_mask_flat]
+                            ntokens = targets.size(0)
+                        else:  # MASS data
+                            src_inputs = batch["src_texts"].squeeze(0)
+                            pad_indices = batch["pad_idx"].squeeze(0)
+                            if src_inputs.size(0) < self.num_gpu:
+                                continue
 
-                        masked_info = mass_mask(self.mask_prob, pad_indices, src_inputs, model.text_processor)
-                        predictions = self.model(src_inputs=masked_info["src_text"],
-                                                 tgt_inputs=masked_info["to_recover"],
-                                                 tgt_positions=masked_info["positions"],
-                                                 src_langs=batch["langs"].squeeze(0),
-                                                 log_softmax=True)
-                        targets = masked_info["targets"]
-                        ntokens = targets.size(0)
+                            masked_info = mass_mask(self.mask_prob, pad_indices, src_inputs, model.text_processor)
+                            predictions = self.model(src_inputs=masked_info["src_text"],
+                                                     tgt_inputs=masked_info["to_recover"],
+                                                     tgt_positions=masked_info["positions"],
+                                                     src_langs=batch["langs"].squeeze(0),
+                                                     log_softmax=True)
+                            targets = masked_info["targets"]
+                            ntokens = targets.size(0)
 
-                    if self.num_gpu == 1:
-                        targets = targets.to(predictions.device)
-                    if self.rank >= 0: targets = targets.to(self.device)
+                        if self.num_gpu == 1:
+                            targets = targets.to(predictions.device)
+                        if self.rank >= 0: targets = targets.to(self.device)
 
-                    loss = self.criterion(predictions, targets).mean()
-                    backward(loss, self.optimizer, self.fp16)
+                        loss = self.criterion(predictions, targets).mean()
+                        self.scaler.scale(loss).backward()
 
-                    loss = float(loss.data) * ntokens
-                    tokens += ntokens
-                    total_tokens += ntokens
-                    total_loss += loss
-                    cur_loss += loss
+                        loss = float(loss.data) * ntokens
+                        tokens += ntokens
+                        total_tokens += ntokens
+                        total_loss += loss
+                        cur_loss += loss
 
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
-                    step += 1
-                    if step % accum == 0:
-                        self.optimizer.step()
-                        self.optimizer.zero_grad()
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+                        step += 1
+                        if step % accum == 0:
+                            self.optimizer.step()
+                            self.optimizer.zero_grad()
 
-                    if is_mass_batch:
-                        mass_unmask(masked_info["src_text"], masked_info["src_mask"], masked_info["mask_idx"])
+                        if is_mass_batch:
+                            mass_unmask(masked_info["src_text"], masked_info["src_mask"], masked_info["mask_idx"])
 
-                    if step % 50 == 0 and tokens > 0:
-                        elapsed = time.time() - start
-                        print(self.rank, "->", datetime.datetime.now(),
-                              "Epoch Step: %d Loss: %f Tokens per Sec: %f " % (
-                                  step, cur_loss / tokens, tokens / elapsed))
+                        if step % 50 == 0 and tokens > 0:
+                            elapsed = time.time() - start
+                            print(self.rank, "->", datetime.datetime.now(),
+                                  "Epoch Step: %d Loss: %f Tokens per Sec: %f " % (
+                                      step, cur_loss / tokens, tokens / elapsed))
 
-                        if mt_dev_iter is not None and step % 5000 == 0 and self.rank <= 0:
-                            bleu = self.eval_bleu(mt_dev_iter, saving_path)
-                            print("BLEU:", bleu)
+                            if mt_dev_iter is not None and step % 5000 == 0 and self.rank <= 0:
+                                bleu = self.eval_bleu(mt_dev_iter, saving_path)
+                                print("BLEU:", bleu)
 
-                        if step % 10000 == 0:
-                            if self.rank <= 0:
-                                if self.rank < 0:
-                                    model.cpu().save(saving_path + ".latest")
-                                elif self.rank == 0:
-                                    model.save(saving_path + ".latest")
+                            if step % 10000 == 0:
+                                if self.rank <= 0:
+                                    if self.rank < 0:
+                                        model.cpu().save(saving_path + ".latest")
+                                    elif self.rank == 0:
+                                        model.save(saving_path + ".latest")
 
-                                if save_opt:
-                                    with open(os.path.join(saving_path + ".latest", "optim"), "wb") as fp:
-                                        pickle.dump(self.optimizer, fp)
-                                if self.rank < 0:
-                                    model = model.to(self.device)
+                                    if save_opt:
+                                        with open(os.path.join(saving_path + ".latest", "optim"), "wb") as fp:
+                                            pickle.dump(self.optimizer, fp)
+                                    if self.rank < 0:
+                                        model = model.to(self.device)
 
-                        start, tokens, cur_loss = time.time(), 0, 0
+                            start, tokens, cur_loss = time.time(), 0, 0
 
                 except RuntimeError as err:
                     print(repr(err))
@@ -286,9 +284,8 @@ class Trainer:
             optimizer = build_optimizer(mt_model, options.learning_rate, warump_steps=options.warmup)
 
         trainer = Trainer(model=mt_model, mask_prob=options.mask_prob, optimizer=optimizer, clip=options.clip,
-                          beam_width=options.beam_width, max_len_a=options.max_len_a,
-                          max_len_b=options.max_len_b, len_penalty_ratio=options.len_penalty_ratio,
-                          fp16=options.fp16, rank=options.local_rank)
+                          beam_width=options.beam_width, max_len_a=options.max_len_a, max_len_b=options.max_len_b,
+                          len_penalty_ratio=options.len_penalty_ratio, rank=options.local_rank)
 
         pin_memory = torch.cuda.is_available()
 
@@ -389,5 +386,6 @@ if __name__ == "__main__":
         print(options)
     init_distributed(options)
     Trainer.train(options=options)
-    if options.local_rank >= 0: cleanup_distributed(options)
+    if options.local_rank >= 0:
+        torch.distributed.destroy_process_group()
     print("Finished Training!")
