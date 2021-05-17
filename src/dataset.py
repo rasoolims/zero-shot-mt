@@ -54,7 +54,7 @@ class MTDataset(Dataset):
             cur_max_dst_len = max(cur_max_dst_len, int(dst.size(0)))
 
             cur_src_batch.append(src)
-            cur_srct_batch.append(src)
+            cur_srct_batch.append(srct)
             cur_dst_batch.append(dst)
 
             batch_capacity_size = (cur_max_src_len ** 2 + cur_max_dst_len ** 2) * len(
@@ -72,12 +72,16 @@ class MTDataset(Dataset):
                 srct_pad_mask = (src_batch != dst_pad_idx)
                 dst_pad_mask = (dst_batch != dst_pad_idx)
 
-                entry = {"src_texts": src_batch, "srct_texts": srct_batch, "src_pad_mask": src_pad_mask, "dst_texts": dst_batch,
-                         "dst_pad_mask": dst_pad_mask, "dst_langs": torch.LongTensor(cur_dst_langs[:-1])}
+                entry = {"src_texts": src_batch, "srct_texts": srct_batch, "src_pad_mask": src_pad_mask,
+                         "dst_texts": dst_batch,
+                         "srct_pad_mask": srct_pad_mask, "dst_pad_mask": dst_pad_mask,
+                         "dst_langs": torch.LongTensor(cur_dst_langs[:-1])}
                 self.batches.append(entry)
-                cur_src_batch, cur_src_batch, cur_dst_batch = [cur_src_batch[-1]], [cur_srct_batch[-1]], [cur_dst_batch[-1]]
+                cur_src_batch, cur_src_batch, cur_dst_batch = [cur_src_batch[-1]], [cur_srct_batch[-1]], [
+                    cur_dst_batch[-1]]
                 cur_dst_langs = [cur_dst_langs[-1]]
-                cur_max_src_len, cur_max_srct_len, cur_max_dst_len = int(cur_src_batch[0].size(0)), int(cur_srct_batch[0].size(0)), int(cur_dst_batch[0].size(0))
+                cur_max_src_len, cur_max_srct_len, cur_max_dst_len = int(cur_src_batch[0].size(0)), int(
+                    cur_srct_batch[0].size(0)), int(cur_dst_batch[0].size(0))
 
             if ei % 1000 == 0:
                 print(ei, "/", len(examples), end="\r")

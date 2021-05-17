@@ -68,7 +68,7 @@ class BeamDecoder(nn.Module):
         batch_size = src_inputs.size(0)
         src_mask = src_mask.to(device)
 
-        encoder_states = self.seq2seq_model.encode(src_inputs, src_mask, srct_inputs, srct_mask)
+        encoder_states, shallow_encoder_states = self.seq2seq_model.encode(src_inputs, src_mask, srct_inputs, srct_mask)
         eos = self.seq2seq_model.text_processor.sep_token_id()
 
         first_position_output = first_tokens.unsqueeze(1).to(device)
@@ -109,22 +109,28 @@ class BeamDecoder(nn.Module):
             cur_scores = top_beam_scores.view(-1).unsqueeze(-1)
             output_mask = torch.ones(cur_outputs.size()).to(cur_outputs.device)
             enc_states = encoder_states if i == 1 else torch.repeat_interleave(encoder_states, beam_width, 0)
+            if self.seq2seq_model.multi_stream:
+                shallow_enc_states = shallow_encoder_states if i == 1 else torch.repeat_interleave(
+                    shallow_encoder_states, beam_width, 0)
+                cur_srct_mask = srct_mask if i == 1 else torch.repeat_interleave(srct_mask, beam_width, 0)
+            else:
+                shallow_enc_states, cur_srct_mask = None, None
 
             dst_langs = tgt_langs.unsqueeze(-1).expand(-1, cur_outputs.size(1)).to(device)
             if i > 1:
                 dst_langs = torch.repeat_interleave(dst_langs, beam_width, 0)
-            if src_inputs is not None:
-                cur_src_mask = src_mask if i == 1 else torch.repeat_interleave(src_mask, beam_width, 0)
-            else:
-                cur_src_mask = None
+
+            cur_src_mask = src_mask if i == 1 else torch.repeat_interleave(src_mask, beam_width, 0)
 
             decoder = self.seq2seq_model.decoder
             output_layer = self.seq2seq_model.output_layer if not self.seq2seq_model.lang_dec else \
                 self.seq2seq_model.output_layer[batch_lang]
 
-            decoder_states = decoder(encoder_states=enc_states, input_ids=cur_outputs,
-                                     encoder_attention_mask=cur_src_mask,
-                                     tgt_attention_mask=output_mask, token_type_ids=dst_langs)
+            decoder_states = self.seq2seq_model.attend_output(encoder_states=enc_states,
+                                                              shallow_encoder_states=shallow_enc_states,
+                                                              src_mask=cur_src_mask, srct_mask=cur_srct_mask,
+                                                              tgt_attn_mask=output_mask,
+                                                              tgt_inputs=cur_outputs, tgt_langs=dst_langs)
             decoder_states = decoder_states[:, -1, :]
 
             output = F.log_softmax(output_layer(decoder_states), dim=-1)

@@ -275,7 +275,7 @@ class Trainer:
             mt_model = Seq2Seq(text_processor=text_processor, lang_dec=options.lang_decoder,
                                dec_layer=options.decoder_layer, embed_dim=options.embed_dim,
                                intermediate_dim=options.intermediate_layer_dim, freeze_encoder=options.freeze_encoder,
-                               shallow_encoder=options.shallow_encoder, multi_steam=options.multi_steam)
+                               shallow_encoder=options.shallow_encoder, multi_stream=options.multi_stream)
 
         print("Model initialization done!")
 
@@ -284,6 +284,7 @@ class Trainer:
                 optimizer = pickle.load(fp)
         else:
             optimizer = build_optimizer(mt_model, options.learning_rate, warump_steps=options.warmup)
+
         trainer = Trainer(model=mt_model, mask_prob=options.mask_prob, optimizer=optimizer, clip=options.clip,
                           beam_width=options.beam_width, max_len_a=options.max_len_a,
                           max_len_b=options.max_len_b, len_penalty_ratio=options.len_penalty_ratio,

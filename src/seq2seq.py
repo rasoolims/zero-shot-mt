@@ -45,7 +45,7 @@ def future_mask(tgt_mask):
 class Seq2Seq(nn.Module):
     def __init__(self, text_processor: TextProcessor, lang_dec: bool = True, dec_layer: int = 3, embed_dim: int = 768,
                  intermediate_dim: int = 3072, freeze_encoder: bool = False, shallow_encoder: bool = False,
-                 multi_steam: bool = False):
+                 multi_stream: bool = False):
         super(Seq2Seq, self).__init__()
         self.text_processor: TextProcessor = text_processor
         self.config = decoder_config(vocab_size=text_processor.tokenizer.get_vocab_size(),
@@ -55,7 +55,7 @@ class Seq2Seq(nn.Module):
                                      layer=dec_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim,
                                      num_lang=len(text_processor.languages))
 
-        self.multi_stream = multi_steam
+        self.multi_stream = multi_stream
         self.use_xlm = not shallow_encoder
         if self.use_xlm:
             tokenizer_class, weights, model_class = XLMRobertaTokenizer, 'xlm-roberta-base', XLMRobertaModel
@@ -65,7 +65,15 @@ class Seq2Seq(nn.Module):
             enc_config = copy.deepcopy(self.config)
             enc_config.add_cross_attention = False
             enc_config.is_decoder = False
-            self.encoder = BertEncoderModel(self.config)
+            self.encoder = BertEncoderModel(enc_config)
+
+        if self.multi_stream:
+            enc_config = copy.deepcopy(self.config)
+            enc_config.add_cross_attention = False
+            enc_config.is_decoder = False
+            self.shallow_encoder = BertEncoderModel(enc_config)
+            self.encoder_gate = nn.Parameter(torch.zeros(1, self.config.hidden_size).fill_(0.1),
+                                             requires_grad=True)
 
         self.dec_layer = dec_layer
         self.embed_dim = embed_dim
@@ -78,6 +86,17 @@ class Seq2Seq(nn.Module):
             self.output_layer = nn.ModuleList([BertOutputLayer(self.config) for _ in text_processor.languages])
         else:
             self.output_layer = BertOutputLayer(self.config)
+            if self.multi_stream:
+                self.shallow_encoder._tie_or_clone_weights(self.output_layer,
+                                                           self.shallow_encoder.embeddings.position_embeddings)
+
+        if self.multi_stream:
+            self.shallow_encoder._tie_or_clone_weights(self.shallow_encoder.embeddings.position_embeddings,
+                                                       self.decoder.embeddings.position_embeddings)
+            self.shallow_encoder._tie_or_clone_weights(self.shallow_encoder.embeddings.token_type_embeddings,
+                                                       self.decoder.embeddings.token_type_embeddings)
+            self.shallow_encoder._tie_or_clone_weights(self.shallow_encoder.embeddings.word_embeddings,
+                                                       self.decoder.embeddings.word_embeddings)
 
     def src_eos_id(self):
         if self.use_xlm:
@@ -114,7 +133,11 @@ class Seq2Seq(nn.Module):
         if self.use_xlm:
             encoder_states = encoder_states['last_hidden_state']
 
-        return encoder_states
+        if self.multi_stream:
+            shallow_encoder_states = self.shallow_encoder(srct_inputs, attention_mask=srct_mask)
+            return encoder_states, shallow_encoder_states
+        else:
+            return encoder_states, None
 
     def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, tgt_langs, srct_inputs, srct_mask,
                 log_softmax: bool = False):
@@ -137,7 +160,8 @@ class Seq2Seq(nn.Module):
         if self.multi_stream and srct_mask.device != device:
             srct_mask = srct_mask.to(device)
 
-        encoder_states = self.encode(src_inputs, src_mask, srct_inputs=srct_inputs, srct_mask=srct_mask)
+        encoder_states, shallow_encoder_states = self.encode(src_inputs, src_mask, srct_inputs=srct_inputs,
+                                                             srct_mask=srct_mask)
 
         subseq_mask = future_mask(tgt_mask[:, :-1])
         if subseq_mask.device != tgt_inputs.device:
@@ -145,9 +169,9 @@ class Seq2Seq(nn.Module):
 
         output_layer = self.output_layer if not self.lang_dec else self.output_layer[batch_lang]
 
-        decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs[:, :-1],
-                                      encoder_attention_mask=src_mask, tgt_attention_mask=subseq_mask,
-                                      token_type_ids=tgt_langs[:, :-1])
+        decoder_output = self.attend_output(encoder_states, shallow_encoder_states, src_mask, srct_mask, subseq_mask,
+                                            tgt_inputs[:, :-1], tgt_langs[:, :-1])
+
         diag_outputs_flat = decoder_output.view(-1, decoder_output.size(-1))
         tgt_non_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
         non_padded_outputs = diag_outputs_flat[tgt_non_mask_flat]
@@ -155,6 +179,24 @@ class Seq2Seq(nn.Module):
         if log_softmax:
             outputs = F.log_softmax(outputs, dim=-1)
         return outputs
+
+    def attend_output(self, encoder_states, shallow_encoder_states, src_mask, srct_mask, tgt_attn_mask, tgt_inputs,
+                      tgt_langs):
+        if self.multi_stream:
+            first_decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs,
+                                                encoder_attention_mask=src_mask, tgt_attention_mask=tgt_attn_mask,
+                                                token_type_ids=tgt_langs)
+            second_decoder_output = self.decoder(encoder_states=shallow_encoder_states, input_ids=tgt_inputs,
+                                                 encoder_attention_mask=srct_mask, tgt_attention_mask=tgt_attn_mask,
+                                                 token_type_ids=tgt_langs)
+            eps = 1e-7
+            sig_gate = torch.sigmoid(self.encoder_gate + eps)
+            decoder_output = sig_gate * first_decoder_output + (1 - sig_gate) * second_decoder_output
+        else:
+            decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs[:, :-1],
+                                          encoder_attention_mask=src_mask, tgt_attention_mask=tgt_attn_mask,
+                                          token_type_ids=tgt_langs[:, :-1])
+        return decoder_output
 
     def save(self, out_dir: str):
         if not os.path.exists(out_dir):
