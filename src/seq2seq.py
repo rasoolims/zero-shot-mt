@@ -193,9 +193,9 @@ class Seq2Seq(nn.Module):
             sig_gate = torch.sigmoid(self.encoder_gate + eps)
             decoder_output = sig_gate * first_decoder_output + (1 - sig_gate) * second_decoder_output
         else:
-            decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs[:, :-1],
+            decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs,
                                           encoder_attention_mask=src_mask, tgt_attention_mask=tgt_attn_mask,
-                                          token_type_ids=tgt_langs[:, :-1])
+                                          token_type_ids=tgt_langs)
         return decoder_output
 
     def save(self, out_dir: str):
