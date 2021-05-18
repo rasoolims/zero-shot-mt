@@ -69,7 +69,7 @@ class MTDataset(Dataset):
                 dst_batch = pad_sequence(cur_dst_batch[:-1], batch_first=True, padding_value=dst_pad_idx)
                 src_pad_mask = (src_batch != src_pad_idx)
                 # Bellow should be dst_pad_idx since srct has the same tokenizer as the target output.
-                srct_pad_mask = (src_batch != dst_pad_idx)
+                srct_pad_mask = (srct_batch != dst_pad_idx)
                 dst_pad_mask = (dst_batch != dst_pad_idx)
 
                 entry = {"src_texts": src_batch, "srct_texts": srct_batch, "src_pad_mask": src_pad_mask,
