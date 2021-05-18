@@ -67,10 +67,11 @@ def write(text_processor: TextProcessor, output_file: str, src_txt_file: str, sr
                 else:
                     src_tok_line = text_processor.tokenize_one_sentence_with_langid(src_line.strip(), src_lang)
 
+                srct_tok_line = text_processor.tokenize_one_sentence_with_langid(src_line.strip(), src_lang)
                 dst_tok_line = text_processor.tokenize_one_sentence_with_langid(dst_line.strip(), dst_lang)
 
                 if min_len <= len(src_tok_line) <= max_len and min_len <= len(dst_tok_line) <= max_len:
-                    examples[line_num] = (src_tok_line, dst_tok_line, dst_lang_str, src_tok_line)
+                    examples[line_num] = (src_tok_line, dst_tok_line, dst_lang_str, srct_tok_line)
                     lens[line_num] = len(dst_tok_line)
                     line_num += 1
 
