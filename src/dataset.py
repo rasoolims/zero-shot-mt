@@ -73,13 +73,11 @@ class MTDataset(Dataset):
                 dst_pad_mask = (dst_batch != dst_pad_idx)
 
                 entry = {"src_texts": src_batch, "srct_texts": srct_batch, "src_pad_mask": src_pad_mask,
-                         "dst_texts": dst_batch,
-                         "srct_pad_mask": srct_pad_mask, "dst_pad_mask": dst_pad_mask,
+                         "dst_texts": dst_batch, "srct_pad_mask": srct_pad_mask, "dst_pad_mask": dst_pad_mask,
                          "dst_langs": torch.LongTensor(cur_dst_langs[:-1])}
                 self.batches.append(entry)
-                cur_src_batch, cur_src_batch, cur_dst_batch = [cur_src_batch[-1]], [cur_srct_batch[-1]], [
-                    cur_dst_batch[-1]]
-                cur_dst_langs = [cur_dst_langs[-1]]
+                cur_src_batch, cur_srct_batch = [cur_src_batch[-1]], [cur_srct_batch[-1]]
+                cur_dst_batch, cur_dst_langs = [cur_dst_batch[-1]], [cur_dst_langs[-1]]
                 cur_max_src_len, cur_max_srct_len, cur_max_dst_len = int(cur_src_batch[0].size(0)), int(
                     cur_srct_batch[0].size(0)), int(cur_dst_batch[0].size(0))
 
