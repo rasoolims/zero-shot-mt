@@ -132,7 +132,8 @@ class Trainer:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
                         step += 1
                         if step % accum == 0:
-                            self.optimizer.step()
+                            self.scaler.step(self.optimizer)
+                            self.scaler.update()
                             self.optimizer.zero_grad()
 
                         if is_mass_batch:
