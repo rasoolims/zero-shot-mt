@@ -96,6 +96,9 @@ class BeamDecoder(nn.Module):
         vocab = torch.stack([torch.LongTensor([range(seq2seq_model.config.vocab_size)])] * beam_width, dim=1).view(
             -1).to(device)
 
+        output_layer = self.seq2seq_model.output_layer if not self.seq2seq_model.lang_dec else \
+            self.seq2seq_model.output_layer[batch_lang]
+
         for i in range(1, max_len):
             cur_outputs = top_beam_outputs.view(-1, top_beam_outputs.size(-1))
 
@@ -124,10 +127,6 @@ class BeamDecoder(nn.Module):
                 dst_langs = torch.repeat_interleave(dst_langs, beam_width, 0)
 
             cur_src_mask = src_mask if i == 1 else torch.repeat_interleave(src_mask, beam_width, 0)
-
-            decoder = self.seq2seq_model.decoder
-            output_layer = self.seq2seq_model.output_layer if not self.seq2seq_model.lang_dec else \
-                self.seq2seq_model.output_layer[batch_lang]
 
             decoder_states = self.seq2seq_model.attend_output(encoder_states=enc_states,
                                                               shallow_encoder_states=shallow_enc_states,
