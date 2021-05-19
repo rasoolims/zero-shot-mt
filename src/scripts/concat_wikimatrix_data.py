@@ -3,7 +3,7 @@ import sys
 
 input_dir = os.path.abspath(sys.argv[1])
 output_file = os.path.abspath(sys.argv[2])
-with open(os.path.join(output_file, ".en")) as enw, open(os.path.join(output_file, ".src")) as srcw:
+with open(output_file + ".en", "w") as enw, open(output_file + ".src", "w") as srcw:
     for file in os.listdir(input_dir):
         if file.endswith("tsv"):
             en_src = "en-" in file  # English is source!
