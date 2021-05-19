@@ -34,7 +34,7 @@ def write(text_processor: TextProcessor, output_file: str, src_txt_file: str, sr
                 else:
                     src_tok_line = text_processor.tokenize_one_sentence_with_langid(src_line.strip(), src_lang)
 
-                srct_tok_line = text_processor.tokenize_one_sentence_with_langid(srct_line.strip(), src_lang)
+                srct_tok_line = text_processor.tokenize_one_sentence(srct_line.strip())
                 dst_tok_line = text_processor.tokenize_one_sentence_with_langid(dst_line.strip(), dst_lang)
 
                 if min_len <= len(src_tok_line) <= max_len and min_len <= len(
@@ -67,7 +67,7 @@ def write(text_processor: TextProcessor, output_file: str, src_txt_file: str, sr
                 else:
                     src_tok_line = text_processor.tokenize_one_sentence_with_langid(src_line.strip(), src_lang)
 
-                srct_tok_line = text_processor.tokenize_one_sentence_with_langid(src_line.strip(), src_lang)
+                srct_tok_line = text_processor.tokenize_one_sentence(src_line.strip())
                 dst_tok_line = text_processor.tokenize_one_sentence_with_langid(dst_line.strip(), dst_lang)
 
                 if min_len <= len(src_tok_line) <= max_len and min_len <= len(dst_tok_line) <= max_len:
@@ -104,7 +104,8 @@ def get_options():
     parser.add_option("--tok", dest="tokenizer_path", help="Path to the tokenizer folder", metavar="FILE", default=None)
     parser.add_option("--max_seq_len", dest="max_seq_len", help="Max sequence length", type="int", default=175)
     parser.add_option("--min_seq_len", dest="min_seq_len", help="Max sequence length", type="int", default=1)
-    parser.add_option("--src-lang", dest="src_lang", type="str", default=None)
+    parser.add_option("--src-lang", dest="src_lang", type="str", help="Only use it with the --shallow option",
+                      default=None)
     parser.add_option("--dst-lang", dest="dst_lang", type="str", default=None)
     parser.add_option("--shallow", action="store_true", dest="shallow_encoder",
                       help="Use shallow encoder instead of XLM", default=False)
@@ -121,5 +122,5 @@ if __name__ == "__main__":
     dst_lang = tokenizer.token_id("<" + options.dst_lang + ">") if options.dst_lang is not None else None
     write(text_processor=tokenizer, output_file=options.output_path, src_txt_file=options.src_data_path,
           srct_txt_file=options.srct_data_path,
-          dst_txt_file=options.dst_data_path, src_lang=src_lang, dst_lang=dst_lang, shallow=options.shallow_encoder)
+          dst_txt_file=options.dst_data_path, dst_lang=dst_lang, shallow=options.shallow_encoder)
     print(datetime.datetime.now(), "Finished")
