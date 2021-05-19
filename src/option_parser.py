@@ -43,10 +43,7 @@ def get_mt_options_parser():
                       help="Path to the MT train data pickle files (SHOULD NOT BE USED IN PURELY UNSUPERVISED SETTING)",
                       metavar="FILE", default=None)
     parser.set_default("mask_prob", 0.5)
-    parser.add_option("--mass_train", dest="mass_train_path", metavar="FILE", default=None)
     parser.add_option("--dec", dest="decoder_layer", help="# decoder layers", type="int", default=6)
-    parser.add_option("--ignore-mt-mass", action="store_true", dest="ignore_mt_mass",
-                      help="Ignore MT data in backtranslation loss of MASS model", default=False)
     parser.add_option("--output", dest="output", help="Output file (for simiality)", metavar="FILE", default=None)
     parser.add_option("--save-opt", action="store_true", dest="save_opt", default=False)
     parser.add_option("--acc", dest="accum", help="Gradient accumulation", type="int", default=1)

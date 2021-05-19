@@ -57,7 +57,7 @@ def write(text_processor: TextProcessor, output_file: str, src_txt_file: str, sr
         print("Dumping")
         with open(output_file, "wb") as fw:
             marshal.dump(sorted_examples, fw)
-    elif dst_txt_file is not None:
+    else:
         dst_lang_str = text_processor.languages[text_processor.id2token(dst_lang)]
         with open(src_txt_file, "r") as s_fp, open(dst_txt_file, "r") as d_fp:
             for src_line, dst_line in zip(s_fp, d_fp):
@@ -89,37 +89,6 @@ def write(text_processor: TextProcessor, output_file: str, src_txt_file: str, sr
         print("Dumping")
         with open(output_file, "wb") as fw:
             marshal.dump(sorted_examples, fw)
-
-    else:
-        part_num = 0
-        # Used for MASS training where we only have source sentences.
-        with open(src_txt_file, "r") as s_fp:
-            for src_line in s_fp:
-                if len(src_line.strip()) == 0: continue
-                src_tok_line = text_processor.tokenize_one_sentence_with_langid(src_line.strip(), src_lang)
-                if min_len <= len(src_tok_line) <= max_len:
-                    examples[line_num] = (src_tok_line, src_lang_str)
-                    lens[line_num] = len(src_tok_line)
-                    line_num += 1
-                    if line_num % 1000 == 0:
-                        print(line_num, "\r", end="")
-
-                if len(examples) >= 6000000:
-                    print(datetime.datetime.now(), "Sorting and writing", part_num)
-                    sorted_lens = sorted(lens.items(), key=lambda item: item[1])
-                    sorted_examples = list(map(lambda len_item: examples[len_item[0]], sorted_lens))
-                    with open(output_file + "." + str(part_num), "wb") as fw:
-                        marshal.dump(sorted_examples, fw)
-                    examples = {}
-                    lens = {}
-                    part_num += 1
-
-        if len(examples) > 0:
-            print(datetime.datetime.now(), "Sorting and writing", part_num)
-            sorted_lens = sorted(lens.items(), key=lambda item: item[1])
-            sorted_examples = list(map(lambda len_item: examples[len_item[0]], sorted_lens))
-            with open(output_file + "." + str(part_num), "wb") as fw:
-                marshal.dump(sorted_examples, fw)
 
 
 def get_options():

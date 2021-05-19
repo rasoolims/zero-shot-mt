@@ -61,8 +61,7 @@ class Trainer:
         self.reference = None
         self.best_bleu = -1.0
 
-    def train_epoch(self, step: int, saving_path: str = None,
-                    mass_data_iter: List[data_utils.DataLoader] = None, mt_dev_iter: List[data_utils.DataLoader] = None,
+    def train_epoch(self, step: int, saving_path: str = None, mt_dev_iter: List[data_utils.DataLoader] = None,
                     mt_train_iter: List[data_utils.DataLoader] = None, max_step: int = 300000, accum=1,
                     save_opt: bool = False,
                     **kwargs):
@@ -70,7 +69,7 @@ class Trainer:
         start = time.time()
         total_tokens, total_loss, tokens, cur_loss = 0, 0, 0, 0
         cur_loss = 0
-        batch_zip, shortest = self.get_batch_zip(mass_data_iter, mt_train_iter)
+        batch_zip, shortest = self.get_batch_zip(mt_train_iter)
 
         model = (
             self.model.module if hasattr(self.model, "module") else self.model
@@ -78,43 +77,27 @@ class Trainer:
         self.optimizer.zero_grad()
         for i, batches in enumerate(batch_zip):
             for batch in batches:
-                is_mass_batch = "dst_texts" not in batch
                 try:
                     with autocast():
-                        if not is_mass_batch:  # MT data
-                            src_inputs = batch["src_texts"].squeeze(0)
-                            src_mask = batch["src_pad_mask"].squeeze(0)
-                            tgt_inputs = batch["dst_texts"].squeeze(0)
-                            tgt_mask = batch["dst_pad_mask"].squeeze(0)
-                            dst_langs = batch["dst_langs"].squeeze(0)
+                        src_inputs = batch["src_texts"].squeeze(0)
+                        src_mask = batch["src_pad_mask"].squeeze(0)
+                        tgt_inputs = batch["dst_texts"].squeeze(0)
+                        tgt_mask = batch["dst_pad_mask"].squeeze(0)
+                        dst_langs = batch["dst_langs"].squeeze(0)
 
-                            # Second stream of data in case of multi-stream processing.
-                            srct_inputs = batch["srct_texts"].squeeze(0)
-                            srct_mask = batch["srct_pad_mask"].squeeze(0)
+                        # Second stream of data in case of multi-stream processing.
+                        srct_inputs = batch["srct_texts"].squeeze(0)
+                        srct_mask = batch["srct_pad_mask"].squeeze(0)
 
-                            if src_inputs.size(0) < self.num_gpu:
-                                continue
-                            predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
-                                                     srct_inputs=srct_inputs, srct_mask=srct_mask,
-                                                     tgt_mask=tgt_mask, tgt_langs=dst_langs, log_softmax=True)
-                            targets = tgt_inputs[:, 1:].contiguous().view(-1)
-                            tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
-                            targets = targets[tgt_mask_flat]
-                            ntokens = targets.size(0)
-                        else:  # MASS data
-                            src_inputs = batch["src_texts"].squeeze(0)
-                            pad_indices = batch["pad_idx"].squeeze(0)
-                            if src_inputs.size(0) < self.num_gpu:
-                                continue
-
-                            masked_info = mass_mask(self.mask_prob, pad_indices, src_inputs, model.text_processor)
-                            predictions = self.model(src_inputs=masked_info["src_text"],
-                                                     tgt_inputs=masked_info["to_recover"],
-                                                     tgt_positions=masked_info["positions"],
-                                                     src_langs=batch["langs"].squeeze(0),
-                                                     log_softmax=True)
-                            targets = masked_info["targets"]
-                            ntokens = targets.size(0)
+                        if src_inputs.size(0) < self.num_gpu:
+                            continue
+                        predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
+                                                 srct_inputs=srct_inputs, srct_mask=srct_mask,
+                                                 tgt_mask=tgt_mask, tgt_langs=dst_langs, log_softmax=True)
+                        targets = tgt_inputs[:, 1:].contiguous().view(-1)
+                        tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
+                        targets = targets[tgt_mask_flat]
+                        ntokens = targets.size(0)
 
                     if self.num_gpu == 1:
                         targets = targets.to(predictions.device)
@@ -136,8 +119,6 @@ class Trainer:
                         self.scaler.update()
                         self.optimizer.zero_grad()
 
-                    if is_mass_batch:
-                        mass_unmask(masked_info["src_text"], masked_info["src_mask"], masked_info["mask_idx"])
 
                     if step % 50 == 0 and tokens > 0:
                         elapsed = time.time() - start
@@ -190,8 +171,8 @@ class Trainer:
 
         return step
 
-    def get_batch_zip(self, mass_data_iter, mt_train_iter):
-        iters = list(chain(*filter(lambda x: x != None, [mass_data_iter, mt_train_iter])))
+    def get_batch_zip(self, mt_train_iter):
+        iters = list(chain(*filter(lambda x: x != None, [mt_train_iter])))
         shortest = min(len(l) for l in iters)
         return zip(*iters), shortest
 
@@ -290,15 +271,6 @@ class Trainer:
 
         pin_memory = torch.cuda.is_available()
 
-        mass_train_data, mass_train_loader, mt_dev_loader = None, None, None
-        if options.mass_train_path is not None:
-            mass_train_paths = options.mass_train_path.strip().split(",")
-            if options.step > 0:
-                mass_train_data, mass_train_loader = Trainer.get_mass_loader(mass_train_paths, mt_model,
-                                                                             num_processors, options,
-                                                                             pin_memory,
-                                                                             keep_examples=False)
-
         mt_train_loader = None
         if options.mt_train_path is not None:
             mt_train_loader = Trainer.get_mt_train_data(mt_model, num_processors, options, pin_memory)
@@ -310,8 +282,7 @@ class Trainer:
         step, train_epoch = 0, 1
         while options.step > 0 and step < options.step:
             print("train epoch", train_epoch)
-            step = trainer.train_epoch(mass_data_iter=mass_train_loader,
-                                       mt_train_iter=mt_train_loader, max_step=options.step,
+            step = trainer.train_epoch(mt_train_iter=mt_train_loader, max_step=options.step,
                                        mt_dev_iter=mt_dev_loader, saving_path=options.model_path, step=step,
                                        save_opt=options.save_opt, accum=options.accum)
             train_epoch += 1
@@ -360,24 +331,6 @@ class Trainer:
                                         batch_size=1, shuffle=(options.local_rank < 0), pin_memory=pin_memory)
             mt_train_loader.append(mtl)
         return mt_train_loader
-
-    @staticmethod
-    def get_mass_loader(mass_train_paths, mt_model, num_processors, options, pin_memory, keep_examples):
-        mass_train_data, mass_train_loader = [], []
-        for i, mass_train_path in enumerate(mass_train_paths):
-            td = dataset.MassDataset(batch_pickle_dir=mass_train_path,
-                                     max_batch_capacity=num_processors * options.total_capacity,
-                                     max_batch=num_processors * options.batch,
-                                     src_pad_idx=mt_model.src_pad_id(),
-                                     max_seq_len=options.max_seq_len, keep_examples=keep_examples, )
-            mass_train_data.append(td)
-
-            dl = data_utils.DataLoader(td, sampler=None if options.local_rank < 0 else DistributedSampler(td,
-                                                                                                          rank=options.local_rank),
-                                       batch_size=1,
-                                       shuffle=(options.local_rank < 0), pin_memory=pin_memory)
-            mass_train_loader.append(dl)
-        return mass_train_data, mass_train_loader
 
 
 if __name__ == "__main__":
