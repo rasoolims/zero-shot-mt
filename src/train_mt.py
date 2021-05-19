@@ -116,53 +116,53 @@ class Trainer:
                             targets = masked_info["targets"]
                             ntokens = targets.size(0)
 
-                        if self.num_gpu == 1:
-                            targets = targets.to(predictions.device)
-                        if self.rank >= 0: targets = targets.to(self.device)
+                    if self.num_gpu == 1:
+                        targets = targets.to(predictions.device)
+                    if self.rank >= 0: targets = targets.to(self.device)
 
-                        loss = self.criterion(predictions, targets).mean()
-                        self.scaler.scale(loss).backward()
+                    loss = self.criterion(predictions, targets).mean()
+                    self.scaler.scale(loss).backward()
 
-                        loss = float(loss.data) * ntokens
-                        tokens += ntokens
-                        total_tokens += ntokens
-                        total_loss += loss
-                        cur_loss += loss
+                    loss = float(loss.data) * ntokens
+                    tokens += ntokens
+                    total_tokens += ntokens
+                    total_loss += loss
+                    cur_loss += loss
 
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
-                        step += 1
-                        if step % accum == 0:
-                            self.scaler.step(self.optimizer)
-                            self.scaler.update()
-                            self.optimizer.zero_grad()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+                    step += 1
+                    if step % accum == 0:
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
+                        self.optimizer.zero_grad()
 
-                        if is_mass_batch:
-                            mass_unmask(masked_info["src_text"], masked_info["src_mask"], masked_info["mask_idx"])
+                    if is_mass_batch:
+                        mass_unmask(masked_info["src_text"], masked_info["src_mask"], masked_info["mask_idx"])
 
-                        if step % 50 == 0 and tokens > 0:
-                            elapsed = time.time() - start
-                            print(self.rank, "->", datetime.datetime.now(),
-                                  "Epoch Step: %d Loss: %f Tokens per Sec: %f " % (
-                                      step, cur_loss / tokens, tokens / elapsed))
+                    if step % 50 == 0 and tokens > 0:
+                        elapsed = time.time() - start
+                        print(self.rank, "->", datetime.datetime.now(),
+                              "Epoch Step: %d Loss: %f Tokens per Sec: %f " % (
+                                  step, cur_loss / tokens, tokens / elapsed))
 
-                            if mt_dev_iter is not None and step % 5000 == 0 and self.rank <= 0:
-                                bleu = self.eval_bleu(mt_dev_iter, saving_path)
-                                print("BLEU:", bleu)
+                        if mt_dev_iter is not None and step % 5000 == 0 and self.rank <= 0:
+                            bleu = self.eval_bleu(mt_dev_iter, saving_path)
+                            print("BLEU:", bleu)
 
-                            if step % 10000 == 0:
-                                if self.rank <= 0:
-                                    if self.rank < 0:
-                                        model.cpu().save(saving_path + ".latest")
-                                    elif self.rank == 0:
-                                        model.save(saving_path + ".latest")
+                        if step % 10000 == 0:
+                            if self.rank <= 0:
+                                if self.rank < 0:
+                                    model.cpu().save(saving_path + ".latest")
+                                elif self.rank == 0:
+                                    model.save(saving_path + ".latest")
 
-                                    if save_opt:
-                                        with open(os.path.join(saving_path + ".latest", "optim"), "wb") as fp:
-                                            pickle.dump(self.optimizer, fp)
-                                    if self.rank < 0:
-                                        model = model.to(self.device)
+                                if save_opt:
+                                    with open(os.path.join(saving_path + ".latest", "optim"), "wb") as fp:
+                                        pickle.dump(self.optimizer, fp)
+                                if self.rank < 0:
+                                    model = model.to(self.device)
 
-                            start, tokens, cur_loss = time.time(), 0, 0
+                        start, tokens, cur_loss = time.time(), 0, 0
 
                 except RuntimeError as err:
                     print(repr(err))
