@@ -67,6 +67,9 @@ class BeamDecoder(nn.Module):
         batch_lang = int(tgt_langs[0])
         batch_size = src_inputs.size(0)
         src_mask = src_mask.to(device)
+        srct_mask = srct_mask.to(device)
+        src_inputs = src_inputs.to(device)
+        srct_inputs = srct_inputs.to(device)
 
         encoder_states, shallow_encoder_states = self.seq2seq_model.encode(src_inputs, src_mask, srct_inputs, srct_mask)
         eos = self.seq2seq_model.text_processor.sep_token_id()
