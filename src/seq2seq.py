@@ -134,6 +134,9 @@ class Seq2Seq(nn.Module):
             encoder_states = encoder_states['last_hidden_state']
 
         if self.multi_stream:
+            if srct_inputs.device != device:
+                srct_inputs = srct_inputs.to(device)
+                srct_mask = srct_mask.to(device)
             shallow_encoder_states = self.shallow_encoder(srct_inputs, attention_mask=srct_mask)
             return encoder_states, shallow_encoder_states
         else:
