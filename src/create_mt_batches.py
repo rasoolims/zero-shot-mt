@@ -44,7 +44,7 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, src_lang: int,
     examples = list(map(lambda x: (src_encode(x[0]), target_encode(x[1]), srct_enclode(x[2])),
                         zip(src_lines, dst_lines, dst_lines)))
     print(datetime.datetime.now(), "Getting example lengths!")
-    example_length = dict(map(lambda e: (e[0], len(e[1])), enumerate(examples)))
+    example_length = dict(map(lambda e: (e[0], len(e[1][0])), enumerate(examples)))
     print(datetime.datetime.now(), "Sorting example lengths!")
     sorted_lens = sorted(example_length.items(), key=lambda item: item[1])
     print(datetime.datetime.now(), "Getting sorted examples!")
