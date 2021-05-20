@@ -22,7 +22,6 @@ def write(text_processor: TextProcessor, output_file: str, src_txt_file: str, sr
 
     examples = {}
     line_num = 0
-    src_lang_str = text_processor.languages[text_processor.id2token(src_lang)]
     lens = {}
     if srct_txt_file is not None:
         dst_lang_str = text_processor.languages[text_processor.id2token(dst_lang)]
@@ -118,7 +117,7 @@ if __name__ == "__main__":
     tokenizer = TextProcessor(options.tokenizer_path)
 
     print(datetime.datetime.now(), "Writing batches")
-    src_lang = tokenizer.token_id("<" + options.src_lang + ">")
+    src_lang = None if options.src_lang is None else tokenizer.token_id("<" + options.src_lang + ">")
     dst_lang = tokenizer.token_id("<" + options.dst_lang + ">") if options.dst_lang is not None else None
     write(text_processor=tokenizer, output_file=options.output_path, src_txt_file=options.src_data_path,
           srct_txt_file=options.srct_data_path,
