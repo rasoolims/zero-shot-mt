@@ -11,7 +11,7 @@ Second file line:  "This is a sentence ."
 Output line: "<en> This is a sentence . </s>"
 """
 
-if len(sys.argv)<3:
+if len(sys.argv) < 3:
     print(comment)
     sys.exit(0)
 

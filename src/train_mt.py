@@ -119,7 +119,6 @@ class Trainer:
                         self.scaler.update()
                         self.optimizer.zero_grad()
 
-
                     if step % 50 == 0 and tokens > 0:
                         elapsed = time.time() - start
                         print(self.rank, "->", datetime.datetime.now(),

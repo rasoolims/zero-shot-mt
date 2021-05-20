@@ -1,5 +1,6 @@
 import os
 import sys
+
 import icu
 
 tl = icu.Transliterator.createInstance('Any-Latin; Latin-ASCII')
@@ -11,5 +12,3 @@ with open(os.path.abspath(sys.argv[1]), "r") as r, open(os.path.abspath(sys.argv
         w.write("\n")
         print(i, end="\r")
 print("\n Finished!")
-
-
