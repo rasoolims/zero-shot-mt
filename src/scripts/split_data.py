@@ -10,7 +10,7 @@ num_splits = int(sys.argv[2])
 
 for s in range(num_splits):
     print(datetime.datetime.now(), "Write split", str(s + 1))
-    with open(os.path.abspath(sys.argv[2]) + str(s + 1), "r") as w:
+    with open(os.path.abspath(sys.argv[3]) + str(s + 1), "w") as w:
         for i in range(s, len(lines), step=num_splits):
             w.write(lines[i].strip() + "\n")
 print(datetime.datetime.now(), "Finished!")
