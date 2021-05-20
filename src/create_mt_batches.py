@@ -120,6 +120,6 @@ if __name__ == "__main__":
     src_lang = None if options.src_lang is None else tokenizer.token_id("<" + options.src_lang + ">")
     dst_lang = tokenizer.token_id("<" + options.dst_lang + ">") if options.dst_lang is not None else None
     write(text_processor=tokenizer, output_file=options.output_path, src_txt_file=options.src_data_path,
-          srct_txt_file=options.srct_data_path,
+          srct_txt_file=options.srct_data_path, src_lang=src_lang,
           dst_txt_file=options.dst_data_path, dst_lang=dst_lang, shallow=options.shallow_encoder)
     print(datetime.datetime.now(), "Finished")
