@@ -18,6 +18,7 @@ from loss import SmoothedNLLLoss
 from option_parser import get_mt_options_parser
 from seq2seq import Seq2Seq
 from seq_gen import BeamDecoder, get_outputs_until_eos
+from textprocessor import TextProcessor
 from utils import *
 
 sys.excepthook = ultratb.FormattedTB(mode='Verbose', color_scheme='Linux', call_pdb=False)
@@ -83,7 +84,6 @@ class Trainer:
                         src_mask = batch["src_pad_mask"].squeeze(0)
                         tgt_inputs = batch["dst_texts"].squeeze(0)
                         tgt_mask = batch["dst_pad_mask"].squeeze(0)
-                        dst_langs = batch["dst_langs"].squeeze(0)
 
                         # Second stream of data in case of multi-stream processing.
                         srct_inputs = batch["srct_texts"].squeeze(0)
@@ -93,7 +93,7 @@ class Trainer:
                             continue
                         predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
                                                  srct_inputs=srct_inputs, srct_mask=srct_mask,
-                                                 tgt_mask=tgt_mask, tgt_langs=dst_langs, log_softmax=True)
+                                                 tgt_mask=tgt_mask, log_softmax=True)
                         targets = tgt_inputs[:, 1:].contiguous().view(-1)
                         tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
                         targets = targets[tgt_mask_flat]
@@ -189,7 +189,6 @@ class Trainer:
                     src_inputs = batch["src_texts"].squeeze(0)
                     src_mask = batch["src_pad_mask"].squeeze(0)
                     tgt_inputs = batch["dst_texts"].squeeze(0)
-                    dst_langs = batch["dst_langs"].squeeze(0)
                     src_pad_idx = batch["src_pad_idx"].squeeze(0)
 
                     # Second stream of data in case of multi-stream processing.
@@ -201,7 +200,7 @@ class Trainer:
 
                     outputs = self.generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
                                              first_tokens=tgt_inputs[:, 0], srct_inputs=srct_inputs,
-                                             src_mask=src_mask, srct_mask=srct_mask, tgt_langs=dst_langs,
+                                             src_mask=src_mask, srct_mask=srct_mask,
                                              pad_idx=model.text_processor.pad_token_id())
                     if self.num_gpu > 1 and self.rank < 0:
                         new_outputs = []
@@ -251,10 +250,10 @@ class Trainer:
         if options.pretrained_path is not None:
             mt_model = Seq2Seq.load(Seq2Seq, options.pretrained_path, tok_dir=options.tokenizer_path)
         else:
-            mt_model = Seq2Seq(text_processor=text_processor, lang_dec=options.lang_decoder,
-                               dec_layer=options.decoder_layer, embed_dim=options.embed_dim,
-                               intermediate_dim=options.intermediate_layer_dim, freeze_encoder=options.freeze_encoder,
-                               shallow_encoder=options.shallow_encoder, multi_stream=options.multi_stream)
+            mt_model = Seq2Seq(text_processor=text_processor, dec_layer=options.decoder_layer,
+                               embed_dim=options.embed_dim, intermediate_dim=options.intermediate_layer_dim,
+                               freeze_encoder=options.freeze_encoder, shallow_encoder=options.shallow_encoder,
+                               multi_stream=options.multi_stream)
 
         print("Model initialization done!")
 

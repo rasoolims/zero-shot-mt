@@ -7,8 +7,8 @@ from transformers import XLMRobertaTokenizer
 from textprocessor import TextProcessor
 
 
-def write(tp: TextProcessor, output_file: str, src_txt_file: str, src_lang: int, srct_txt_file: str = None,
-          dst_txt_file: str = None, dst_lang: int = None, min_len: int = 1, max_len: int = 175, shallow: bool = False):
+def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file: str = None,
+          dst_txt_file: str = None, shallow: bool = False):
     """
     There are scenarios for which the input comes from two streams such as original text and transliterated text. Or we
     want to use two different encoders such as XLM and another one. In these cases, srct_txt_file serves as the second
@@ -36,23 +36,24 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, src_lang: int,
 
     assert len(src_lines) == len(dst_lines) == len(srct_lines)
     print(datetime.datetime.now(), "Number of parallel sentences:", len(dst_lines))
-    src_encode = lambda x: tp.tokenize_one_sentence_with_langid(x, src_lang) if shallow else tokenizer.encode(x)
-    target_encode = lambda x: tp.tokenize_one_sentence_with_langid(x, dst_lang)
-    srct_enclode = lambda x: tp.tokenize_one_sentence(x)
+    if shallow:
+        src_ids = [encoding.ids for encoding in tp.tokenizer.encode_batch(src_lines)]
+    else:
+        src_ids = tokenizer.batch_encode_plus(src_lines).data['input_ids']
+    dst_ids = [[tp.bos_token_id()] + encoding.ids + [tp.sep_token_id()] for encoding in
+               tp.tokenizer.encode_batch(dst_lines)]
+    srct_ids = [[tp.bos_token_id()] + encoding.ids + [tp.sep_token_id()] for encoding in
+                tp.tokenizer.encode_batch(srct_lines)]
 
-    print(datetime.datetime.now(), "Tokenizing examples!")
-    examples = list(map(lambda x: (src_encode(x[0]), target_encode(x[1]), srct_enclode(x[2])),
-                        zip(src_lines, dst_lines, dst_lines)))
     print(datetime.datetime.now(), "Getting example lengths!")
-    example_length = dict(map(lambda e: (e[0], len(e[1][0])), enumerate(examples)))
+    example_length = dict(map(lambda e: (e[0], len(e[1])), enumerate(src_ids)))
     print(datetime.datetime.now(), "Sorting example lengths!")
     sorted_lens = sorted(example_length.items(), key=lambda item: item[1])
     print(datetime.datetime.now(), "Getting sorted examples!")
-    sorted_examples = list(map(lambda i: examples[i[0]], sorted_lens))
+    sorted_examples = list(map(lambda i: (src_ids[i[0]], dst_ids[i[0]], srct_ids[i[0]]), sorted_lens))
     print(datetime.datetime.now(), "Dumping sorted examples!")
     with open(output_file, "wb") as fw:
-        dst_lang_id = tp.languages[tp.id2token(dst_lang)]
-        marshal.dump((sorted_examples, dst_lang_id), fw)
+        marshal.dump(sorted_examples, fw)
     print(datetime.datetime.now(), "Finished!")
 
 
@@ -69,9 +70,6 @@ def get_options():
     parser.add_option("--tok", dest="tokenizer_path", help="Path to the tokenizer folder", metavar="FILE", default=None)
     parser.add_option("--max_seq_len", dest="max_seq_len", help="Max sequence length", type="int", default=175)
     parser.add_option("--min_seq_len", dest="min_seq_len", help="Max sequence length", type="int", default=1)
-    parser.add_option("--src-lang", dest="src_lang", type="str", help="Only use it with the --shallow option",
-                      default=None)
-    parser.add_option("--dst-lang", dest="dst_lang", type="str", default=None)
     parser.add_option("--shallow", action="store_true", dest="shallow_encoder",
                       help="Use shallow encoder instead of XLM", default=False)
     (options, args) = parser.parse_args()
@@ -82,8 +80,5 @@ if __name__ == "__main__":
     options = get_options()
     tokenizer = TextProcessor(options.tokenizer_path)
 
-    src_lang = None if options.src_lang is None else tokenizer.token_id("<" + options.src_lang + ">")
-    dst_lang = tokenizer.token_id("<" + options.dst_lang + ">") if options.dst_lang is not None else None
     write(tp=tokenizer, output_file=options.output_path, src_txt_file=options.src_data_path,
-          srct_txt_file=options.srct_data_path, src_lang=src_lang,
-          dst_txt_file=options.dst_data_path, dst_lang=dst_lang, shallow=options.shallow_encoder)
+          srct_txt_file=options.srct_data_path, dst_txt_file=options.dst_data_path, shallow=options.shallow_encoder)

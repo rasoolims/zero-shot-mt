@@ -13,7 +13,7 @@ from textprocessor import TextProcessor
 
 
 def decoder_config(vocab_size: int, pad_token_id: int, bos_token_id: int, eos_token_id: int, layer: int = 6,
-                   embed_dim: int = 768, intermediate_dim: int = 3072, num_lang: int = 1) -> PretrainedConfig:
+                   embed_dim: int = 768, intermediate_dim: int = 3072) -> PretrainedConfig:
     config = {
         "attention_probs_dropout_prob": 0.1,
         "hidden_act": "gelu",
@@ -29,7 +29,6 @@ def decoder_config(vocab_size: int, pad_token_id: int, bos_token_id: int, eos_to
         "bos_token_id": bos_token_id,
         "eos_token_id": eos_token_id,
         "is_decoder": True,
-        "type_vocab_size": num_lang,
     }
     config = BertConfig(**config)
     config.add_cross_attention = True
@@ -43,7 +42,7 @@ def future_mask(tgt_mask):
 
 
 class Seq2Seq(nn.Module):
-    def __init__(self, text_processor: TextProcessor, lang_dec: bool = True, dec_layer: int = 3, embed_dim: int = 768,
+    def __init__(self, text_processor: TextProcessor, dec_layer: int = 3, embed_dim: int = 768,
                  intermediate_dim: int = 3072, freeze_encoder: bool = False, shallow_encoder: bool = False,
                  multi_stream: bool = False):
         super(Seq2Seq, self).__init__()
@@ -52,8 +51,7 @@ class Seq2Seq(nn.Module):
                                      pad_token_id=text_processor.pad_token_id(),
                                      bos_token_id=text_processor.bos_token_id(),
                                      eos_token_id=text_processor.sep_token_id(),
-                                     layer=dec_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim,
-                                     num_lang=len(text_processor.languages))
+                                     layer=dec_layer, embed_dim=embed_dim, intermediate_dim=intermediate_dim)
 
         self.multi_stream = multi_stream
         self.use_xlm = not shallow_encoder
@@ -78,17 +76,13 @@ class Seq2Seq(nn.Module):
         self.dec_layer = dec_layer
         self.embed_dim = embed_dim
         self.intermediate_dim = intermediate_dim
-        self.lang_dec = lang_dec
         self.decoder = BertDecoderModel(self.config)
         self.freeze_encoder = freeze_encoder
 
-        if lang_dec:
-            self.output_layer = nn.ModuleList([BertOutputLayer(self.config) for _ in text_processor.languages])
-        else:
-            self.output_layer = BertOutputLayer(self.config)
-            if self.multi_stream:
-                self.shallow_encoder._tie_or_clone_weights(self.output_layer,
-                                                           self.shallow_encoder.embeddings.position_embeddings)
+        self.output_layer = BertOutputLayer(self.config)
+        if self.multi_stream:
+            self.shallow_encoder._tie_or_clone_weights(self.output_layer,
+                                                       self.shallow_encoder.embeddings.position_embeddings)
 
         if self.multi_stream:
             self.shallow_encoder._tie_or_clone_weights(self.shallow_encoder.embeddings.position_embeddings,
@@ -142,15 +136,12 @@ class Seq2Seq(nn.Module):
         else:
             return encoder_states, None
 
-    def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, tgt_langs, srct_inputs, srct_mask,
-                log_softmax: bool = False):
+    def forward(self, src_inputs, tgt_inputs, src_mask, tgt_mask, srct_inputs, srct_mask, log_softmax: bool = False):
         """
         srct_inputs is used in case of multi_stream where srct_inputs is the second stream.
         """
         "Take in and process masked src and target sequences."
         device = self.encoder.embeddings.word_embeddings.weight.device
-        batch_lang = int(tgt_langs[0])
-        tgt_langs = tgt_langs.unsqueeze(-1).expand(-1, tgt_inputs.size(-1)).to(device)
         src_inputs = src_inputs.to(device)
         if tgt_inputs.device != device:
             tgt_inputs = tgt_inputs.to(device)
@@ -170,43 +161,37 @@ class Seq2Seq(nn.Module):
         if subseq_mask.device != tgt_inputs.device:
             subseq_mask = subseq_mask.to(device)
 
-        output_layer = self.output_layer if not self.lang_dec else self.output_layer[batch_lang]
-
         decoder_output = self.attend_output(encoder_states, shallow_encoder_states, src_mask, srct_mask, subseq_mask,
-                                            tgt_inputs[:, :-1], tgt_langs[:, :-1])
+                                            tgt_inputs[:, :-1])
 
         diag_outputs_flat = decoder_output.view(-1, decoder_output.size(-1))
         tgt_non_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
         non_padded_outputs = diag_outputs_flat[tgt_non_mask_flat]
-        outputs = output_layer(non_padded_outputs)
+        outputs = self.output_layer(non_padded_outputs)
         if log_softmax:
             outputs = F.log_softmax(outputs, dim=-1)
         return outputs
 
-    def attend_output(self, encoder_states, shallow_encoder_states, src_mask, srct_mask, tgt_attn_mask, tgt_inputs,
-                      tgt_langs):
+    def attend_output(self, encoder_states, shallow_encoder_states, src_mask, srct_mask, tgt_attn_mask, tgt_inputs):
         if self.multi_stream:
             first_decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs,
-                                                encoder_attention_mask=src_mask, tgt_attention_mask=tgt_attn_mask,
-                                                token_type_ids=tgt_langs)
+                                                encoder_attention_mask=src_mask, tgt_attention_mask=tgt_attn_mask)
             second_decoder_output = self.decoder(encoder_states=shallow_encoder_states, input_ids=tgt_inputs,
-                                                 encoder_attention_mask=srct_mask, tgt_attention_mask=tgt_attn_mask,
-                                                 token_type_ids=tgt_langs)
+                                                 encoder_attention_mask=srct_mask, tgt_attention_mask=tgt_attn_mask)
             eps = 1e-7
             sig_gate = torch.sigmoid(self.encoder_gate + eps)
             decoder_output = sig_gate * first_decoder_output + (1 - sig_gate) * second_decoder_output
         else:
             decoder_output = self.decoder(encoder_states=encoder_states, input_ids=tgt_inputs,
-                                          encoder_attention_mask=src_mask, tgt_attention_mask=tgt_attn_mask,
-                                          token_type_ids=tgt_langs)
+                                          encoder_attention_mask=src_mask, tgt_attention_mask=tgt_attn_mask)
         return decoder_output
 
     def save(self, out_dir: str):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         with open(os.path.join(out_dir, "mt_config"), "wb") as fp:
-            pickle.dump((self.lang_dec, self.dec_layer, self.embed_dim, self.intermediate_dim, self.freeze_encoder,
-                         self.multi_stream), fp)
+            pickle.dump((self.dec_layer, self.embed_dim, self.intermediate_dim, self.freeze_encoder, self.multi_stream),
+                        fp)
         try:
             torch.save(self.state_dict(), os.path.join(out_dir, "mt_model.state_dict"))
         except:
@@ -220,9 +205,9 @@ class Seq2Seq(nn.Module):
         text_processor = TextProcessor(tok_model_path=tok_dir)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         with open(os.path.join(out_dir, "mt_config"), "rb") as fp:
-            lang_dec, dec_layer, embed_dim, intermediate_dim, freeze_encoder, multi_stream = pickle.load(fp)
+            dec_layer, embed_dim, intermediate_dim, freeze_encoder, multi_stream = pickle.load(fp)
 
-            mt_model = cls(text_processor=text_processor, lang_dec=lang_dec, dec_layer=dec_layer, embed_dim=embed_dim,
+            mt_model = cls(text_processor=text_processor, dec_layer=dec_layer, embed_dim=embed_dim,
                            intermediate_dim=intermediate_dim, multi_stream=multi_stream)
 
             mt_model.load_state_dict(torch.load(os.path.join(out_dir, "mt_model.state_dict"), map_location=device),

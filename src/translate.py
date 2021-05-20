@@ -39,7 +39,6 @@ def translate_batch(batch, generator, text_processor, verbose=False):
     srct_inputs = batch["srct_texts"].squeeze(0)
     srct_mask = batch["srct_pad_mask"].squeeze(0)
     tgt_inputs = batch["dst_texts"].squeeze(0)
-    dst_langs = batch["dst_langs"].squeeze(0)
     src_pad_idx = batch["src_pad_idx"].squeeze(0)
     src_text = None
     if verbose:
@@ -50,7 +49,7 @@ def translate_batch(batch, generator, text_processor, verbose=False):
         outputs = generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
                             srct_inputs=srct_inputs, srct_mask=srct_mask,
                             first_tokens=tgt_inputs[:, 0],
-                            src_mask=src_mask, tgt_langs=dst_langs,
+                            src_mask=src_mask,
                             pad_idx=text_processor.pad_token_id())
     if torch.cuda.device_count() > 1:
         new_outputs = []
@@ -69,10 +68,7 @@ def build_data_loader(options, text_processor):
         input_tokenizer = text_processor
 
     print(datetime.datetime.now(), "Binarizing test data")
-    assert options.target_lang is not None
-    dst_lang = "<" + options.target_lang + ">"
-    target_lang = text_processor.languages[dst_lang]
-    fixed_output = [text_processor.token_id(dst_lang)]
+    fixed_output = [text_processor.token_id(text_processor.bos)]
     examples = []
     if options.multi_stream:
         with open(options.input_path, "r") as s_fp, open(options.second_input_path, "r") as s2_fp:
@@ -84,7 +80,7 @@ def build_data_loader(options, text_processor):
                     src_tok_line = text_processor.tokenize_one_sentence(src_line.strip().replace(" </s> ", " "))
                 srct_tok_line = text_processor.tokenize_one_sentence(srct_line.strip().replace(" </s> ", " "))
 
-                examples.append((src_tok_line, fixed_output, target_lang, srct_tok_line))
+                examples.append((src_tok_line, fixed_output, srct_tok_line))
                 if i % 10000 == 0:
                     print(i, end="\r")
     else:
@@ -96,7 +92,7 @@ def build_data_loader(options, text_processor):
                 else:
                     src_tok_line = text_processor.tokenize_one_sentence(src_line.strip().replace(" </s> ", " "))
 
-                examples.append((src_tok_line, fixed_output, target_lang, src_tok_line))
+                examples.append((src_tok_line, fixed_output, src_tok_line))
                 if i % 10000 == 0:
                     print(i, end="\r")
     print("\n", datetime.datetime.now(), "Loaded %f examples", (len(examples)))

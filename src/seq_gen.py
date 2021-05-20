@@ -43,16 +43,13 @@ class BeamDecoder(nn.Module):
         length_penalty = torch.pow((lengths + 6.0) / 6.0, self.len_penalty_ratio)
         return length_penalty.unsqueeze(-1)
 
-    def forward(self, src_inputs=None, src_sizes=None, first_tokens=None, src_mask=None, tgt_langs=None,
-                pad_idx=None, max_len: int = None, unpad_output: bool = True, beam_width: int = None,
-                srct_inputs=None, srct_mask=None):
+    def forward(self, src_inputs=None, src_sizes=None, first_tokens=None, src_mask=None, pad_idx=None,
+                max_len: int = None, unpad_output: bool = True, beam_width: int = None, srct_inputs=None,
+                srct_mask=None):
         """
         srct_inputs is used in case of multi_stream where srct_inputs is the second stream.
         """
-        if isinstance(tgt_langs, list):
-            assert len(tgt_langs) == 1
-            tgt_langs = tgt_langs[0]
-
+        if isinstance(first_tokens, list):
             first_tokens = first_tokens[0]
         if isinstance(src_mask, list):
             src_mask = src_mask[0]
@@ -64,7 +61,6 @@ class BeamDecoder(nn.Module):
         if beam_width is None:
             beam_width = self.beam_width
         device = self.seq2seq_model.encoder.embeddings.word_embeddings.weight.device
-        batch_lang = int(tgt_langs[0])
         batch_size = src_inputs.size(0)
         src_mask = src_mask.to(device)
         srct_mask = srct_mask.to(device)
@@ -96,9 +92,6 @@ class BeamDecoder(nn.Module):
         vocab = torch.stack([torch.LongTensor([range(seq2seq_model.config.vocab_size)])] * beam_width, dim=1).view(
             -1).to(device)
 
-        output_layer = self.seq2seq_model.output_layer if not self.seq2seq_model.lang_dec else \
-            self.seq2seq_model.output_layer[batch_lang]
-
         for i in range(1, max_len):
             cur_outputs = top_beam_outputs.view(-1, top_beam_outputs.size(-1))
 
@@ -122,20 +115,16 @@ class BeamDecoder(nn.Module):
             else:
                 shallow_enc_states, cur_srct_mask = None, None
 
-            dst_langs = tgt_langs.unsqueeze(-1).expand(-1, cur_outputs.size(1)).to(device)
-            if i > 1:
-                dst_langs = torch.repeat_interleave(dst_langs, beam_width, 0)
-
             cur_src_mask = src_mask if i == 1 else torch.repeat_interleave(src_mask, beam_width, 0)
 
             decoder_states = self.seq2seq_model.attend_output(encoder_states=enc_states,
                                                               shallow_encoder_states=shallow_enc_states,
                                                               src_mask=cur_src_mask, srct_mask=cur_srct_mask,
                                                               tgt_attn_mask=output_mask,
-                                                              tgt_inputs=cur_outputs, tgt_langs=dst_langs)
+                                                              tgt_inputs=cur_outputs)
             decoder_states = decoder_states[:, -1, :]
 
-            output = F.log_softmax(output_layer(decoder_states), dim=-1)
+            output = F.log_softmax(self.seq2seq_model.output_layer(decoder_states), dim=-1)
             output[eos_mask] = 0  # Disregard those items with EOS in them!
             if i > 1:
                 output[reached_eos_limit.contiguous().view(-1)] = 0  # Disregard those items over size limt!

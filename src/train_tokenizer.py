@@ -12,28 +12,7 @@ def get_tokenizer(train_path: Optional[str] = None,
 
     print("Training Tokenizer...")
     text_processor = TextProcessor()
-    print("Writing raw text...")
-    languages = set()
-    with open(train_path + ".tmp", "w") as wf:
-        with open(train_path, "r") as rf:
-            for i, line in enumerate(rf):
-                spl = [sen.strip() for sen in line.split("</s>") if len(sen.strip()) > 0]
-                if len(spl) == 0: continue
-                if spl[0].startswith("<"):
-                    sen_split = spl[0].strip().split(" ")
-                    spl[0] = " ".join(sen_split[1:])
-                    languages.add(sen_split[0])
-                wf.write("\n".join(spl))
-                wf.write("\n")
-                if (i + 1) % 1000000 == 0:
-                    print(i + 1, "\r", end="")
-    print("Writing raw text done!")
-
-    print(" ".join(languages))
-    text_processor.train_tokenizer(paths=[train_path + ".tmp"], vocab_size=vocab_size, to_save_dir=model_path,
-                                   languages={l: i for i, l in enumerate(sorted(languages))})
-    print("Removing temporary file!")
-    os.system("rm " + train_path + ".tmp &")
+    text_processor.train_tokenizer(paths=[train_path], vocab_size=vocab_size, to_save_dir=model_path, languages={})
     print("done!")
 
 

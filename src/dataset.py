@@ -27,18 +27,16 @@ class MTDataset(Dataset):
         """
         with open(batch_pickle_dir, "rb") as fr:
             print("LOADING MT BATCHES")
-            (examples, dst_language) = marshal.load(fr)
+            examples = marshal.load(fr)
 
             print("BUILDING MT BATCHES")
             self.batches = []
             cur_src_batch, cur_srct_batch, cur_dst_batch = [], [], []
             cur_max_src_len, cur_max_srct_len, cur_max_dst_len = 0, 0, 0
-            cur_dst_langs = []
             for ei, example in enumerate(examples):
                 src = torch.LongTensor(example[0][:max_seq_len])  # trim if longer than expected!
                 dst = torch.LongTensor(example[1][:max_seq_len])  # trim if longer than expected!
                 srct = torch.LongTensor(example[2][:max_seq_len])  # trim if longer than expected!
-                cur_dst_langs.append(dst_language)
                 cur_max_src_len = max(cur_max_src_len, int(src.size(0)))
                 cur_max_srct_len = max(cur_max_srct_len, int(srct.size(0)))
                 cur_max_dst_len = max(cur_max_dst_len, int(dst.size(0)))
@@ -63,11 +61,10 @@ class MTDataset(Dataset):
                     dst_pad_mask = (dst_batch != dst_pad_idx)
 
                     entry = {"src_texts": src_batch, "srct_texts": srct_batch, "src_pad_mask": src_pad_mask,
-                             "dst_texts": dst_batch, "srct_pad_mask": srct_pad_mask, "dst_pad_mask": dst_pad_mask,
-                             "dst_langs": torch.LongTensor(cur_dst_langs[:-1])}
+                             "dst_texts": dst_batch, "srct_pad_mask": srct_pad_mask, "dst_pad_mask": dst_pad_mask}
                     self.batches.append(entry)
                     cur_src_batch, cur_srct_batch = [cur_src_batch[-1]], [cur_srct_batch[-1]]
-                    cur_dst_batch, cur_dst_langs = [cur_dst_batch[-1]], [cur_dst_langs[-1]]
+                    cur_dst_batch = [cur_dst_batch[-1]]
                     cur_max_src_len, cur_max_srct_len, cur_max_dst_len = int(cur_src_batch[0].size(0)), int(
                         cur_srct_batch[0].size(0)), int(cur_dst_batch[0].size(0))
 
@@ -85,7 +82,7 @@ class MTDataset(Dataset):
                 dst_pad_mask = (dst_batch != dst_pad_idx)
                 entry = {"src_texts": src_batch, "src_pad_mask": src_pad_mask, "dst_texts": dst_batch,
                          "srct_texts": srct_batch, "srct_pad_mask": srct_pad_mask,
-                         "dst_pad_mask": dst_pad_mask, "dst_langs": torch.LongTensor(cur_dst_langs)}
+                         "dst_pad_mask": dst_pad_mask}
                 self.batches.append(entry)
 
             if self.keep_src_pad_idx:
@@ -103,17 +100,3 @@ class MTDataset(Dataset):
 
     def __getitem__(self, item):
         return self.batches[item]
-
-
-class TextCollator(object):
-    def __init__(self, src_pad_idx):
-        self.src_pad_idx = src_pad_idx
-
-    def __call__(self, batch):
-        langs, batch_text = [], []
-        for b in batch:
-            batch_text.append(torch.LongTensor(b[0]))
-            langs.append(b[1])
-        padded_text = pad_sequence(batch_text, batch_first=True, padding_value=self.src_pad_idx)
-        pad_mask = (padded_text != self.src_pad_idx)
-        return {"texts": padded_text, "pad_mask": pad_mask, "langs": torch.LongTensor(langs)}
