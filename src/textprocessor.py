@@ -2,7 +2,6 @@ import os
 import pickle
 from typing import Dict, List, Optional
 
-import numpy as np
 from tokenizers import Encoding
 from tokenizers import SentencePieceBPETokenizer
 from tokenizers.normalizers import BertNormalizer
@@ -47,76 +46,6 @@ class TextProcessor:
         with open(os.path.join(directory, "langs"), "wb") as fp:
             pickle.dump(self.languages, fp)
 
-    def tokenize_one_line(self, line, ignore_middle_eos: bool = False) -> List[int]:
-        tokenized = []
-        spl = [sen for sen in line.split("</s>") if len(sen.strip()) > 0]
-        if spl[0].startswith("<"):
-            words = spl[0].strip().split(" ")
-            spl[0] = " ".join(words[1:])
-            tokenized += [self.token_id(words[0])]
-
-        for sen in spl:
-            tokenized += self._tokenize(sen).ids
-            if not ignore_middle_eos:
-                tokenized += [self.sep_token_id()]
-        if ignore_middle_eos:
-            tokenized += [self.sep_token_id()]
-        return tokenized
-
-    def tokenize_one_sentence(self, line) -> List[int]:
-        """
-        Assume that the sentence has language id in the first token and end of sentence as the end!
-        :param line:
-        :return:
-        """
-        spl = line.strip().split(" ")
-        lang_id, sen, eos = spl[0], " ".join(spl[1:-1]), spl[-1]
-        tokenized = [self.token_id(lang_id)] + self._tokenize(sen).ids + [self.token_id(eos)]
-        return tokenized[:512]
-
-    def tokenize_one_sentence_with_langid(self, line, lang_id) -> List[int]:
-        tokenized = [lang_id] + self._tokenize(line).ids + [self.token_id("</s>")]
-        return tokenized[:512]
-
-    def tokenize_lines(self, line, blind_split: bool = False, split_len: int = 512) -> List[List[int]]:
-        """
-
-        :param line:
-        :param blind_split: If True, just splits the tokenized data into chunks without considering that every vector
-        should start with a first word in sentence.
-        :return:
-        """
-        tokenized = []
-        if len(self.languages) > 0:
-            spl = [sen for sen in line.split("</s>") if len(sen.strip()) > 0]
-            lang_id = []
-            if spl[0].startswith("<"):
-                words = spl[0].strip().split(" ")
-                lang_id = [self.token_id(words[0])]
-                spl[0] = " ".join(words[1:])
-
-            max_len = 0
-            for sen in spl:
-                toks = self._tokenize(sen).ids
-                tokenized += lang_id + toks + [self.sep_token_id()]
-                max_len = max(max_len, len(toks) + 1)
-        else:
-            tokenized = self._tokenize(line.strip()).ids
-
-        if blind_split:
-            num_pads = (split_len - (len(tokenized) % split_len))
-            pad_arr = [self.pad_token_id()] * num_pads
-            tokenized = np.array(tokenized + pad_arr)
-            reshaped = tokenized.reshape((-1, split_len))
-            return reshaped
-        else:
-            return self.split_tokenized(tokenized, min(max_len, self.max_len))
-
-    def tokenize(self, lines) -> List[List[int]]:
-        lines = [line.strip() for line in lines.strip().split("\n") if len(line.strip()) > 0]
-        tokenized = self.tokenizer.encode_batch(lines)
-        return [tok.ids for tok in tokenized]
-
     def pad_token_id(self) -> int:
         return self.tokenizer.token_to_id(self.pad_token)
 
@@ -143,67 +72,3 @@ class TextProcessor:
 
     def vocab_size(self) -> int:
         return self.tokenizer.get_vocab_size()
-
-    def is_lang(self, id) -> bool:
-        return self.tokenizer.id_to_token(id) in self.languages
-
-    def lang_id(self, tok):
-        if tok in self.languages:
-            return self.languages[tok]
-        return 0
-
-    def split_tokenized(self, tokenized: List[int], max_length: int = 512) -> List[List[int]]:
-        """
-        Based on self.max_len, splits very long sequences to smaller ones.
-        Here we assume to not have any overlapping sequences.
-        If the first token is a language, we add it to every new sequence.
-        :return:
-        """
-        if len(tokenized) <= max_length:
-            sequences = [tokenized]
-            sequences[-1] = sequences[-1] + (max_length - len(sequences[-1])) * [self.pad_token_id()]
-            return sequences
-
-        has_lang = self.is_lang(tokenized[0])
-        sequence = tokenized[0:] if has_lang else tokenized
-
-        seq_len = len(sequence)
-        sep_id = self.sep_token_id()
-        max_len = max_length - 1 if has_lang else max_length
-
-        cur_start = 0
-        sequences = []
-        built_seq = []
-        truncated = False  # Shows if previous sequence is truncated due to its length.
-        used_ends = set()
-        while cur_start < seq_len:
-            if not truncated or not has_lang:
-                cur_end = min(seq_len, cur_start + max_len)
-            else:
-                cur_end = min(seq_len, cur_start + max_len + 1)
-            subseq = sequence[cur_start:cur_end]
-
-            built_seq += subseq
-            sep_positions = [i for i, id in enumerate(built_seq) if id == sep_id]
-            if len(sep_positions) > 0:
-                if sep_positions[-1] in used_ends:
-                    truncated = True
-                else:
-                    built_seq = built_seq[:sep_positions[-1] + 1]
-                    truncated = False
-            else:
-                truncated = True
-
-            assert built_seq[-1] == sequence[len(built_seq) - 1]
-
-            if has_lang and len(subseq) < max_len + 1:
-                subseq = [tokenized[0]] + subseq
-
-            sequences.append(subseq)
-
-            cur_start = len(built_seq)
-            used_ends.add(cur_start - 1)
-        if len(sequences[-1]) < max_length:
-            sequences[-1] = sequences[-1] + (max_length - len(sequences[-1])) * [self.pad_token_id()]
-        assert built_seq[-1] == sequence[len(built_seq) - 1]
-        return sequences

@@ -75,10 +75,10 @@ def build_data_loader(options, text_processor):
             for i, (src_line, srct_line) in enumerate(zip(s_fp, s2_fp)):
                 if len(src_line.strip()) == 0: continue
                 if not options.shallow:
-                    src_tok_line = input_tokenizer.encode(src_line.strip().replace(" </s> ", " "))
+                    src_tok_line = input_tokenizer.encode(src_line.strip())
                 else:
-                    src_tok_line = text_processor.tokenize_one_sentence(src_line.strip().replace(" </s> ", " "))
-                srct_tok_line = text_processor.tokenize_one_sentence(srct_line.strip().replace(" </s> ", " "))
+                    src_tok_line = text_processor._tokenize(src_line.strip())
+                srct_tok_line = text_processor._tokenize(srct_line.strip())
 
                 examples.append((src_tok_line, fixed_output, srct_tok_line))
                 if i % 10000 == 0:
@@ -88,9 +88,9 @@ def build_data_loader(options, text_processor):
             for i, src_line in enumerate(s_fp):
                 if len(src_line.strip()) == 0: continue
                 if not options.shallow:
-                    src_tok_line = input_tokenizer.encode(src_line.strip().replace(" </s> ", " "))
+                    src_tok_line = input_tokenizer.encode(src_line.strip())
                 else:
-                    src_tok_line = text_processor.tokenize_one_sentence(src_line.strip().replace(" </s> ", " "))
+                    src_tok_line = text_processor._tokenize(src_line.strip())
 
                 examples.append((src_tok_line, fixed_output, src_tok_line))
                 if i % 10000 == 0:
