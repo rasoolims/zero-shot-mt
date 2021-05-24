@@ -47,6 +47,7 @@ class Trainer:
         if rank >= 0:
             self.device = torch.device('cuda', rank)
             torch.cuda.set_device(self.device)
+            print("The device is", self.device)
 
         self.model = self.model.to(self.device)
         self.scaler = GradScaler()
