@@ -255,7 +255,7 @@ class Trainer:
                                freeze_encoder=options.freeze_encoder, shallow_encoder=options.shallow_encoder,
                                multi_stream=options.multi_stream)
 
-        print("Model initialization done!")
+        print(options.local_rank, "Model initialization done!")
 
         if options.continue_train:
             with open(os.path.join(options.pretrained_path, "optim"), "rb") as fp:
