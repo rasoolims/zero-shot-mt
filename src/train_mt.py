@@ -9,7 +9,6 @@ import sacrebleu
 import torch.nn as nn
 import torch.utils.data as data_utils
 from IPython.core import ultratb
-from torch.cuda.amp import GradScaler, autocast
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 
@@ -49,7 +48,6 @@ class Trainer:
             print("The device is", self.device, "with rank", self.rank)
 
         self.model = self.model.to(self.device)
-        self.scaler = GradScaler()
 
         self.generator = BeamDecoder(self.model, beam_width=beam_width, max_len_a=max_len_a, max_len_b=max_len_b,
                                      len_penalty_ratio=len_penalty_ratio)
@@ -79,32 +77,31 @@ class Trainer:
         for i, batches in enumerate(batch_zip):
             for batch in batches:
                 try:
-                    with autocast():
-                        src_inputs = batch["src_texts"].squeeze(0)
-                        src_mask = batch["src_pad_mask"].squeeze(0)
-                        tgt_inputs = batch["dst_texts"].squeeze(0)
-                        tgt_mask = batch["dst_pad_mask"].squeeze(0)
+                    src_inputs = batch["src_texts"].squeeze(0)
+                    src_mask = batch["src_pad_mask"].squeeze(0)
+                    tgt_inputs = batch["dst_texts"].squeeze(0)
+                    tgt_mask = batch["dst_pad_mask"].squeeze(0)
 
-                        # Second stream of data in case of multi-stream processing.
-                        srct_inputs = batch["srct_texts"].squeeze(0)
-                        srct_mask = batch["srct_pad_mask"].squeeze(0)
+                    # Second stream of data in case of multi-stream processing.
+                    srct_inputs = batch["srct_texts"].squeeze(0)
+                    srct_mask = batch["srct_pad_mask"].squeeze(0)
 
-                        if src_inputs.size(0) < self.num_gpu:
-                            continue
-                        predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
-                                                 srct_inputs=srct_inputs, srct_mask=srct_mask,
-                                                 tgt_mask=tgt_mask, log_softmax=True)
-                        targets = tgt_inputs[:, 1:].contiguous().view(-1)
-                        tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
-                        targets = targets[tgt_mask_flat]
-                        ntokens = targets.size(0)
+                    if src_inputs.size(0) < self.num_gpu:
+                        continue
+                    predictions = self.model(src_inputs=src_inputs, tgt_inputs=tgt_inputs, src_mask=src_mask,
+                                             srct_inputs=srct_inputs, srct_mask=srct_mask,
+                                             tgt_mask=tgt_mask, log_softmax=True)
+                    targets = tgt_inputs[:, 1:].contiguous().view(-1)
+                    tgt_mask_flat = tgt_mask[:, 1:].contiguous().view(-1)
+                    targets = targets[tgt_mask_flat]
+                    ntokens = targets.size(0)
 
                     if self.num_gpu == 1:
                         targets = targets.to(predictions.device)
                     if self.rank >= 0: targets = targets.to(self.device)
 
                     loss = self.criterion(predictions, targets).mean()
-                    self.scaler.scale(loss).backward()
+                    loss.backward()
 
                     loss = float(loss.data) * ntokens
                     tokens += ntokens
@@ -115,8 +112,7 @@ class Trainer:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
                     step += 1
                     if step % accum == 0:
-                        self.scaler.step(self.optimizer)
-                        self.scaler.update()
+                        self.optimizer.step()
                         self.optimizer.zero_grad()
 
                     if step % 50 == 0 and tokens > 0:
