@@ -11,6 +11,8 @@ def build_optimizer(model, learning_rate, warump_steps):
 
 def init_distributed(options):
     if options.local_rank >= 0:
+        os.environ['MASTER_ADDR'] = '127.0.0.1'
+        os.environ['MASTER_PORT'] = '29500'
         os.environ['WORLD_SIZE'] = str(torch.cuda.device_count())
         torch.distributed.init_process_group(backend='nccl', world_size=torch.cuda.device_count(),
                                              rank=options.local_rank)
