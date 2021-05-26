@@ -34,7 +34,7 @@ class Trainer:
         self.optimizer = optimizer
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.num_gpu = torch.cuda.device_count()
+        self.num_gpu = torch.cuda.device_count() if rank < 0 else 1
 
         self.mask_prob = mask_prob
         if nll_loss:
@@ -42,7 +42,6 @@ class Trainer:
         else:
             self.criterion = SmoothedNLLLoss(ignore_index=model.text_processor.pad_token_id())
 
-        self.num_gpu = torch.cuda.device_count()
         self.rank = rank
         if rank >= 0:
             self.device = torch.device('cuda', rank)
