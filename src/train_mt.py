@@ -323,9 +323,8 @@ class Trainer:
                                               src_pad_idx=mt_model.src_pad_id(),
                                               dst_pad_idx=mt_model.text_processor.pad_token_id(),
                                               keep_src_pad_idx=False)
-            mtl = data_utils.DataLoader(mt_train_data,
-                                        sampler=None if options.local_rank < 0 else DistributedSampler(mt_train_data,
-                                                                                                       rank=options.local_rank),
+            sampler = None if options.local_rank < 0 else DistributedSampler(mt_train_data, rank=options.local_rank)
+            mtl = data_utils.DataLoader(mt_train_data, sampler=sampler,
                                         batch_size=1, shuffle=(options.local_rank < 0), pin_memory=pin_memory)
             mt_train_loader.append(mtl)
         return mt_train_loader
