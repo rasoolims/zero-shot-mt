@@ -163,12 +163,10 @@ class Trainer:
                     model.cpu().save(saving_path + ".latest")
                     model = model.to(self.device)
                 elif self.rank == 0:
-                    torch.distributed.barrier()
                     model.save(saving_path + ".latest")
                     torch.distributed.barrier()
 
                 if mt_dev_iter is not None:
-                    torch.distributed.barrier()
                     bleu = self.eval_bleu(mt_dev_iter, saving_path)
                     print("BLEU:", bleu)
                     torch.distributed.barrier()
