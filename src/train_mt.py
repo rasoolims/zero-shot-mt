@@ -135,12 +135,14 @@ class Trainer:
                                     model.cpu().save(saving_path + ".latest")
                                 elif self.rank == 0:
                                     model.save(saving_path + ".latest")
-
+                                    torch.distributed.barrier()
                                 if save_opt:
                                     with open(os.path.join(saving_path + ".latest", "optim"), "wb") as fp:
                                         pickle.dump(self.optimizer, fp)
+                                    torch.distributed.barrier()
                                 if self.rank < 0:
                                     model = model.to(self.device)
+
 
                         start, tokens, cur_loss = time.time(), 0, 0
 
@@ -161,10 +163,12 @@ class Trainer:
                     model = model.to(self.device)
                 elif self.rank == 0:
                     model.save(saving_path + ".latest")
+                    torch.distributed.barrier()
 
                 if mt_dev_iter is not None:
                     bleu = self.eval_bleu(mt_dev_iter, saving_path)
                     print("BLEU:", bleu)
+                    torch.distributed.barrier()
         except RuntimeError as err:
             print(repr(err))
 
