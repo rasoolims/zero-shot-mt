@@ -274,12 +274,13 @@ class Trainer:
             mt_train_loader = Trainer.get_mt_train_data(mt_model, num_processors, options, pin_memory)
 
         mt_dev_loader = None
-        if options.mt_dev_path is not None:
+        if options.mt_dev_path is not None and trainer.rank <= 0:
             mt_dev_loader = Trainer.get_mt_dev_data(mt_model, options, pin_memory, text_processor, trainer)
 
         step, train_epoch = 0, 1
         while options.step > 0 and step < options.step:
-            print("train epoch", train_epoch)
+            if trainer.rank <= 0:
+                print("train epoch", train_epoch)
             step = trainer.train_epoch(mt_train_iter=mt_train_loader, max_step=options.step,
                                        mt_dev_iter=mt_dev_loader, saving_path=options.model_path, step=step,
                                        save_opt=options.save_opt, accum=options.accum)
