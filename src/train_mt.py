@@ -142,7 +142,8 @@ class Trainer:
                                 if self.rank < 0:
                                     model = model.to(self.device)
 
-                        torch.distributed.barrier()
+                        if self.rank == 0:
+                            torch.distributed.barrier()
 
                         start, tokens, cur_loss = time.time(), 0, 0
 
@@ -167,7 +168,8 @@ class Trainer:
                 if mt_dev_iter is not None:
                     bleu = self.eval_bleu(mt_dev_iter, saving_path)
                     print("BLEU:", bleu)
-            torch.distributed.barrier()
+            if self.rank == 0:
+                torch.distributed.barrier()
         except RuntimeError as err:
             print(repr(err))
 
@@ -259,7 +261,6 @@ class Trainer:
                                multi_stream=options.multi_stream)
 
         print(options.local_rank, "Model initialization done!")
-        torch.distributed.barrier()
 
         if options.continue_train:
             with open(os.path.join(options.pretrained_path, "optim"), "rb") as fp:
@@ -280,7 +281,8 @@ class Trainer:
         mt_dev_loader = None
         if options.mt_dev_path is not None and trainer.rank <= 0:
             mt_dev_loader = Trainer.get_mt_dev_data(mt_model, options, pin_memory, text_processor, trainer)
-        torch.distributed.barrier()
+        if trainer.rank == 0:
+            torch.distributed.barrier()
 
         step, train_epoch = 0, 1
         while options.step > 0 and step < options.step:
