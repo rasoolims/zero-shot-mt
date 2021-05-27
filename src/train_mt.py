@@ -333,6 +333,9 @@ class Trainer:
 if __name__ == "__main__":
     parser = get_mt_options_parser()
     (options, args) = parser.parse_args()
+    if torch.cuda.is_available() and options.local_rank >= 0:
+        torch.cuda.set_device(options.local_rank)
+
     if options.local_rank <= 0:
         print(options)
     init_distributed(options)
