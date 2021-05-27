@@ -125,7 +125,7 @@ class Trainer:
                               "Epoch Step: %d Loss: %f Tokens per Sec: %f " % (
                                   step, cur_loss / tokens, tokens / elapsed))
 
-                        if mt_dev_iter is not None and step % 5000 == 0 and self.rank <= 0:
+                        if mt_dev_iter is not None and step % 5000 == 0:
                             bleu = self.eval_bleu(mt_dev_iter, saving_path)
                             print("BLEU:", bleu)
 
@@ -153,7 +153,7 @@ class Trainer:
                 break
 
         try:
-            if self.rank <= 0:
+            if True:  # self.rank <= 0:
                 print("Total loss in this epoch: %f" % (total_loss / total_tokens))
                 if self.rank < 0:
                     model.cpu().save(saving_path + ".latest")
@@ -212,27 +212,28 @@ class Trainer:
             model.train()
         bleu = sacrebleu.corpus_bleu(mt_output, [self.reference[:len(mt_output)]], lowercase=True, tokenize="intl")
 
-        with open(os.path.join(saving_path, "bleu.output"), "w") as writer:
-            writer.write("\n".join(
-                [src + "\n" + ref + "\n" + o + "\n\n***************\n" for src, ref, o in
-                 zip(src_text, mt_output, self.reference[:len(mt_output)])]))
-
-        if bleu.score > self.best_bleu:
-            self.best_bleu = bleu.score
-            print("Saving best BLEU", self.best_bleu)
-            with open(os.path.join(saving_path, "bleu.best.output"), "w") as writer:
+        if self.rank <= 0:
+            with open(os.path.join(saving_path, "bleu.output"), "w") as writer:
                 writer.write("\n".join(
                     [src + "\n" + ref + "\n" + o + "\n\n***************\n" for src, ref, o in
                      zip(src_text, mt_output, self.reference[:len(mt_output)])]))
-            if self.rank < 0:
-                model.cpu().save(saving_path)
-                model = model.to(self.device)
-            elif self.rank == 0:
-                model.save(saving_path)
 
-            if save_opt:
-                with open(os.path.join(saving_path, "optim"), "wb") as fp:
-                    pickle.dump(self.optimizer, fp)
+            if bleu.score > self.best_bleu:
+                self.best_bleu = bleu.score
+                print("Saving best BLEU", self.best_bleu)
+                with open(os.path.join(saving_path, "bleu.best.output"), "w") as writer:
+                    writer.write("\n".join(
+                        [src + "\n" + ref + "\n" + o + "\n\n***************\n" for src, ref, o in
+                         zip(src_text, mt_output, self.reference[:len(mt_output)])]))
+                if self.rank < 0:
+                    model.cpu().save(saving_path)
+                    model = model.to(self.device)
+                elif self.rank == 0:
+                    model.save(saving_path)
+
+                if save_opt:
+                    with open(os.path.join(saving_path, "optim"), "wb") as fp:
+                        pickle.dump(self.optimizer, fp)
 
         return bleu.score
 
@@ -273,7 +274,7 @@ class Trainer:
             mt_train_loader = Trainer.get_mt_train_data(mt_model, num_processors, options, pin_memory)
 
         mt_dev_loader = None
-        if options.mt_dev_path is not None and trainer.rank <= 0:
+        if options.mt_dev_path is not None:
             mt_dev_loader = Trainer.get_mt_dev_data(mt_model, options, pin_memory, text_processor, trainer)
 
         step, train_epoch = 0, 1
