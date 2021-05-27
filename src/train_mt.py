@@ -142,6 +142,8 @@ class Trainer:
                                 if self.rank < 0:
                                     model = model.to(self.device)
 
+                        torch.distributed.barrier()
+
                         start, tokens, cur_loss = time.time(), 0, 0
 
                 except RuntimeError as err:
@@ -165,6 +167,7 @@ class Trainer:
                 if mt_dev_iter is not None:
                     bleu = self.eval_bleu(mt_dev_iter, saving_path)
                     print("BLEU:", bleu)
+            torch.distributed.barrier()
         except RuntimeError as err:
             print(repr(err))
 
@@ -256,6 +259,7 @@ class Trainer:
                                multi_stream=options.multi_stream)
 
         print(options.local_rank, "Model initialization done!")
+        torch.distributed.barrier()
 
         if options.continue_train:
             with open(os.path.join(options.pretrained_path, "optim"), "rb") as fp:
@@ -274,12 +278,14 @@ class Trainer:
             mt_train_loader = Trainer.get_mt_train_data(mt_model, num_processors, options, pin_memory)
 
         mt_dev_loader = None
-        if options.mt_dev_path is not None:
+        if options.mt_dev_path is not None and trainer.rank <= 0:
             mt_dev_loader = Trainer.get_mt_dev_data(mt_model, options, pin_memory, text_processor, trainer)
+        torch.distributed.barrier()
 
         step, train_epoch = 0, 1
         while options.step > 0 and step < options.step:
-            print("train epoch", train_epoch)
+            if trainer.rank <= 0:
+                print("train epoch", train_epoch)
             step = trainer.train_epoch(mt_train_iter=mt_train_loader, max_step=options.step,
                                        mt_dev_iter=mt_dev_loader, saving_path=options.model_path, step=step,
                                        save_opt=options.save_opt, accum=options.accum)
