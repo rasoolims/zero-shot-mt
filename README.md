@@ -6,9 +6,9 @@
   * [Installation using virtualenv](#installation-using-virtualenv)
   * [Installation using dockers](#installation-using-dockers)
 - [Train Machine Translation](#train-machine-translation)
-  * [Transliterate the source text!](#transliterate-the-source-text-)
-  * [Collect raw text for languages:__](#collect-raw-text-for-languages)
-  * [Train a tokenizer on the concatenation of all raw text:__](#train-a-tokenizer-on-the-concatenation-of-all-raw-text)
+  * [Transliterate the source text!](#transliterate-the-source-text)
+  * [Collect raw text for languages:](#collect-raw-text-for-languages)
+  * [Train a tokenizer on the concatenation of all raw text:](#train-a-tokenizer-on-the-concatenation-of-all-raw-text)
   * [Train MT on Parallel Data](#train-mt-on-parallel-data)
 
 
