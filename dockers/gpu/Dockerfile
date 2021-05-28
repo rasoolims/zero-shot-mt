@@ -28,7 +28,8 @@ RUN python3 -m pip install pandas
 RUN python3 -m pip install pyarrow
 RUN python3 -m pip install fire
 RUN python3 -m pip install boto3
-#RUN python3 -m pip install apex
+RUN python3 -m pip install pyicu
+RUN python3 -m pip install  sentencepiece
 
 WORKDIR /root
 RUN cd /root

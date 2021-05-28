@@ -10,3 +10,4 @@ pyarrow
 fire
 boto3
 pyicu
+sentencepiece
