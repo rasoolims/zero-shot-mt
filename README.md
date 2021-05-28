@@ -9,7 +9,7 @@
   * [Transliterate the source text!](#transliterate-the-source-text-)
   * [Collect raw text for languages:__](#collect-raw-text-for-languages---)
   * [Train a tokenizer on the concatenation of all raw text:__](#train-a-tokenizer-on-the-concatenation-of-all-raw-text---)
-    + [Train MT on Parallel Data](#train-mt-on-parallel-data)
+  * [Train MT on Parallel Data](#train-mt-on-parallel-data)
 
 
 # Installing Dependencies 
@@ -93,7 +93,7 @@ The vocab size could be any value. Anything between 30000 to 100000 should be go
 
 
 
-### Train MT on Parallel Data
+## Train MT on Parallel Data
 Parallel data could be gold-standard or mined. You should load pre-trained MASS models for the best performance.
 
 __1. Create binary files for training and dev dataset:__ 
