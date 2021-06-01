@@ -132,7 +132,7 @@ After you are done, you can use the model path ``sample/mt_model`` for translati
 __3. Translate:__
 ```bash
 CUDA_VISIBLE_DEVICES=0 python -u translate.py --tok sample/tok/ \
---model sample/mt_model --input sample/dev.fa --input2 sampe/dev.tr.fa\
+--model sample/mt_model --input sample/dev.fa --input2 sample/dev.tr.fa\
 --output sample/dev.output.en 
 ```
 Note that there is a ``--verbose`` option where it puts the input and output lines separated by ``|||``. This is useful especially if you want to use it for back-translation (to make sure that sentence alignments are completely guaranteed), or for annotation projection in which you might need it for word alignment.
