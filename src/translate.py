@@ -50,11 +50,6 @@ def translate_batch(batch, generator, text_processor, verbose=False):
                             first_tokens=tgt_inputs[:, 0],
                             src_mask=src_mask,
                             pad_idx=text_processor.pad_token_id())
-    if torch.cuda.device_count() > 1:
-        new_outputs = []
-        for output in outputs:
-            new_outputs += output
-        outputs = new_outputs
     mt_output = list(map(lambda x: text_processor.tokenizer.decode(x[1:].numpy()), outputs))
     return mt_output, src_text
 
@@ -113,7 +108,6 @@ def build_model(options):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model.eval()
-    num_gpu = torch.cuda.device_count()
     generator = BeamDecoder(model, beam_width=options.beam_width, max_len_a=options.max_len_a,
                             max_len_b=options.max_len_b, len_penalty_ratio=options.len_penalty_ratio)
     generator.eval()
