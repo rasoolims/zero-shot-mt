@@ -45,7 +45,7 @@ def translate_batch(batch, generator, text_processor, verbose=False):
         src_ids = get_outputs_until_eos(generator.seq2seq_model.src_eos_id(), src_inputs, remove_first_token=True)
         src_text = list(map(lambda src: generator.seq2seq_model.decode_src(src), src_ids))
 
-    with autocast:
+    with autocast():
         outputs = generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
                             srct_inputs=srct_inputs, srct_mask=srct_mask,
                             first_tokens=tgt_inputs[:, 0],
