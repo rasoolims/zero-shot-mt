@@ -78,7 +78,10 @@ def build_data_loader(options, text_processor):
                     src_tok_line = input_tokenizer.encode(src_line.strip())
                 else:
                     src_tok_line = text_processor._tokenize(src_line.strip())
+                    src_tok_line = [text_processor.bos_token_id()] + src_tok_line.ids + [text_processor.sep_token_id()]
+
                 srct_tok_line = text_processor._tokenize(srct_line.strip())
+                srct_tok_line = [text_processor.bos_token_id()] + srct_tok_line.ids + [text_processor.sep_token_id()]
 
                 examples.append((src_tok_line, fixed_output, srct_tok_line))
                 if i % 10000 == 0:
@@ -91,6 +94,7 @@ def build_data_loader(options, text_processor):
                     src_tok_line = input_tokenizer.encode(src_line.strip())
                 else:
                     src_tok_line = text_processor._tokenize(src_line.strip())
+                    src_tok_line = [text_processor.bos_token_id()] + src_tok_line.ids + [text_processor.sep_token_id()]
 
                 examples.append((src_tok_line, fixed_output, src_tok_line))
                 if i % 10000 == 0:
