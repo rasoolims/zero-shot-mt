@@ -29,7 +29,6 @@ def get_lm_option_parser():
     parser.add_option("--len-penalty", dest="len_penalty_ratio", help="Length penalty", type="float", default=0.8)
     parser.add_option("--capacity", dest="total_capacity", help="Batch capacity", type="int", default=600)
     parser.add_option("--shallow", action="store_true", dest="shallow", default=False)
-    parser.add_option("--multi", action="store_true", dest="multi_stream", default=False)
     return parser
 
 
@@ -70,7 +69,7 @@ def build_data_loader(options, text_processor):
     print(datetime.datetime.now(), "Binarizing test data")
     fixed_output = [text_processor.token_id(text_processor.bos)]
     examples = []
-    if options.multi_stream:
+    if options.second_input_path is not None:
         with open(options.input_path, "r") as s_fp, open(options.second_input_path, "r") as s2_fp:
             for i, (src_line, srct_line) in enumerate(zip(s_fp, s2_fp)):
                 if len(src_line.strip()) == 0: continue
