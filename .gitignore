@@ -7,3 +7,5 @@
 pytorch_lamb
 src/tests/images
 *.npz
+
+.vscode
