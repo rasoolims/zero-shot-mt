@@ -45,6 +45,7 @@ with open(output_file + ".en", "w") as enw, open(output_file + ".src", "w") as s
                         srcw.write("\n")
                         if lang_file:
                             langf.write(langs_d[l2])
+                            langf.write("\n")
 
     if lang_file:
         langf.close()
