@@ -29,8 +29,12 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file:
     if lang_path:
         print('Loading languages dict...')
         langs = get_langs_d(lang_path)
+        dst_bos_token_id = tp.token_id(langs[dst])
+        srct_bos_token_id = tp.token_id(langs[src])
     else:
         print('Not using languages dict')
+        dst_bos_token_id = tp.bos_token_id()
+        srct_bos_token_id = tp.bos_token_id()
 
     print(datetime.datetime.now(), "Reading source lines!")
     with open(src_txt_file, "r") as s_fp:
@@ -52,8 +56,6 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file:
         src_ids = [encoding.ids for encoding in tp.tokenizer.encode_batch(src_lines)]
     else:
         src_ids = tokenizer.batch_encode_plus(src_lines).data['input_ids']
-    dst_bos_token_id = tp.bos_token_id() if not langs else tp.token_id(langs[dst])
-    srct_bos_token_id = tp.bos_token_id() if not langs else tp.token_id(langs[src])
     dst_ids = [[dst_bos_token_id] + encoding.ids + [tp.sep_token_id()] for encoding in
                tp.tokenizer.encode_batch(dst_lines)]
     srct_ids = [[srct_bos_token_id] + encoding.ids + [tp.sep_token_id()] for encoding in

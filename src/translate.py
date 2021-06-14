@@ -10,6 +10,7 @@ import dataset
 from seq2seq import Seq2Seq
 from seq_gen import BeamDecoder, get_outputs_until_eos
 
+from lang_info import get_langs_d
 
 def get_lm_option_parser():
     parser = OptionParser()
@@ -29,6 +30,7 @@ def get_lm_option_parser():
     parser.add_option("--len-penalty", dest="len_penalty_ratio", help="Length penalty", type="float", default=0.8)
     parser.add_option("--capacity", dest="total_capacity", help="Batch capacity", type="int", default=600)
     parser.add_option("--shallow", action="store_true", dest="shallow", default=False)
+    parser.add_option("--lang", dest="lang_path", help="path to language info file", default='')
     return parser
 
 
@@ -61,6 +63,18 @@ def build_data_loader(options, text_processor):
     else:
         input_tokenizer = text_processor
 
+    src = options.src or options.input.rsplit('.', 1)[-1]
+
+    langs = {}
+    if options.lang_path:
+        print('Loading languages dict...')
+        langs = get_langs_d(options.lang_path)
+        src_bos_token_id = text_processor.token_id(langs[src])
+    else:
+        print('Not using languages dict')
+        src_bos_token_id = text_processor.bos_token_id()
+
+
     print(datetime.datetime.now(), "Binarizing test data")
     fixed_output = [text_processor.token_id(text_processor.bos)]
     examples = []
@@ -72,10 +86,10 @@ def build_data_loader(options, text_processor):
                     src_tok_line = input_tokenizer.encode(src_line.strip())
                 else:
                     src_tok_line = text_processor._tokenize(src_line.strip())
-                    src_tok_line = [text_processor.bos_token_id()] + src_tok_line.ids + [text_processor.sep_token_id()]
+                    src_tok_line = [src_bos_token_id] + src_tok_line.ids + [text_processor.sep_token_id()]
 
                 srct_tok_line = text_processor._tokenize(srct_line.strip())
-                srct_tok_line = [text_processor.bos_token_id()] + srct_tok_line.ids + [text_processor.sep_token_id()]
+                srct_tok_line = [src_bos_token_id] + srct_tok_line.ids + [text_processor.sep_token_id()]
 
                 examples.append((src_tok_line, fixed_output, srct_tok_line))
                 if i % 10000 == 0:
@@ -88,7 +102,7 @@ def build_data_loader(options, text_processor):
                     src_tok_line = input_tokenizer.encode(src_line.strip())
                 else:
                     src_tok_line = text_processor._tokenize(src_line.strip())
-                    src_tok_line = [text_processor.bos_token_id()] + src_tok_line.ids + [text_processor.sep_token_id()]
+                    src_tok_line = [src_bos_token_id] + src_tok_line.ids + [text_processor.sep_token_id()]
 
                 examples.append((src_tok_line, fixed_output, src_tok_line))
                 if i % 10000 == 0:
