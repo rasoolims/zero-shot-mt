@@ -19,15 +19,16 @@ class TextProcessor:
                 self.languages: Dict[str, int] = pickle.load(fp)
         self.init_properties(self.languages)
 
-    def init_properties(self, languages: Dict[str, int] = None):
+    def init_properties(self, languages: Dict[str, str] = None):
         self.max_len = 512
         self.pad_token = "<pad>"
         self.mask_token = "<mask>"
         self.unk_token = "<unk>"
         self.sep_token = "</s>"
         self.bos = "<s>"
+        lang_families = set(languages.values())
         self.special_tokens = [self.pad_token, self.bos, self.unk_token, self.mask_token,
-                               self.sep_token] + list(languages.keys())
+                               self.sep_token] + list(lang_families)
         self.languages = languages
 
     def train_tokenizer(self, paths: List[str], vocab_size: int, to_save_dir: str, languages: Dict[str, int]):

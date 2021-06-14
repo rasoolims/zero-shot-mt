@@ -38,6 +38,7 @@ def get_lang_code(row):
     pt3 = row['ISO639P3code']
 
     # manually fix inconsistencies between WALS and WikiMatrix
+    # TODO: consider getting the language code mappings from https://en.wikipedia.org/wiki/List_of_Wikipedias
     row_id = row['ID']
     if row_id == 'aze':
         return 'az'
@@ -101,6 +102,9 @@ def make_lang_json(wals_path):
     lang_d['sh'] = lang_d['hr']
     lang_d['sr'] = lang_d['hr']
     lang_d['simple'] = lang_d['en']
+
+    lang_d['ja']['Genus'] = 'Japanese'
+    lang_d['ko']['Genus'] = 'Korean'
 
     lang_d['__meta__'] = "v1"
     return lang_d

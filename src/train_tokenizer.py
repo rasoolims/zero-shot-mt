@@ -34,7 +34,7 @@ def get_options():
                       help="Vocabulary size", type="int", default=30000)
     parser.add_option("--model", dest="model_path", help="Directory path to save the best model", metavar="FILE",
                       default=None)
-    parser.add_option("--lang", dest="lang_path", help="path to languages file", default='')
+    parser.add_option("--lang", dest="lang_path", help="path to language info file", default='')
     (options, args) = parser.parse_args()
     return options
 
