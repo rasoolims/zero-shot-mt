@@ -7,14 +7,13 @@ converts format 3 to format 1 where possible -- if there are duplicate format 1,
 import argparse
 import json
 from pathlib import Path
-import pdb
 
 from iso639 import Lang, exceptions
 import pandas as pd
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--wals_path', '-w', default='./wals')
-parser.add_argument('--out_path', '-o', default='./lang_info.json')
+parser.add_argument('--wals_path', '-w', default='../wals')
+parser.add_argument('--out_path', '-o', default='../lang_info.json')
 
 def get_langs_d(lang_path):
     """ Gets the langs dictionary used for other tasks. Other scripts should only need to call this
@@ -64,6 +63,11 @@ def get_lang_code(row):
         return 'wuu'
     elif row_id == 'mnd':
         return 'zh'
+    elif row_id == 'ams':
+        return 'ar'
+    elif row_id == 'rom':
+        print('hihi')
+        return 'ro'
 
     if pd.isna(pt3):
         return ''
@@ -87,7 +91,6 @@ def make_lang_json(wals_path):
     df['ISO639P1code'] = df.apply(get_lang_code, axis=1)
     df.drop_duplicates('ISO639P1code', inplace=True)
     df = df[df['ISO639P1code'] != ''].set_index('ISO639P1code')
-
     lang_d = df.to_dict(orient='index')
     for k in lang_d.keys():
         del lang_d[k]['Source'] # don't need this, save some space

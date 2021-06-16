@@ -88,6 +88,7 @@ class Trainer:
                         # Second stream of data in case of multi-stream processing.
                         srct_inputs = batch["srct_texts"].squeeze(0)
                         srct_mask = batch["srct_pad_mask"].squeeze(0)
+                        import pdb; pdb.set_trace()
 
                         if src_inputs.size(0) < self.num_gpu:
                             continue
