@@ -3,15 +3,24 @@ import marshal
 
 from optparse import OptionParser
 from typing import Optional
+from tqdm import tqdm
 
 from transformers import XLMRobertaTokenizer
 
 from textprocessor import TextProcessor
-from lang_info import get_langs_d
 
+def get_token_id(lang, tp, d):
+    """
+    Get token id faster by caching results in `d`
+    """
+    token_id = d.get(lang)
+    if not token_id:
+        token_id = tp.token_id(lang)
+        d[lang] = token_id
+    return token_id
 
 def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file: str = None,
-          dst_txt_file: str = None, shallow: bool = False, lang_path: Optional[str] = None):
+          dst_txt_file: str = None, shallow: bool = False, lang_lines_path: Optional[str] = None):
     """
     There are scenarios for which the input comes from two streams such as original text and transliterated text. Or we
     want to use two different encoders such as XLM and another one. In these cases, srct_txt_file serves as the second
@@ -22,19 +31,6 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file:
         tokenizer = tokenizer_class.from_pretrained(weights)
     else:
         tokenizer = tp
-    src = src_txt_file.rsplit('.', 1)[-1]
-    dst = dst_txt_file.rsplit('.', 1)[-1]
-
-    langs = {}
-    if lang_path:
-        print('Loading languages dict...')
-        langs = get_langs_d(lang_path)
-        dst_bos_token_id = tp.token_id(langs[dst])
-        srct_bos_token_id = tp.token_id(langs[src])
-    else:
-        print('Not using languages dict')
-        dst_bos_token_id = tp.bos_token_id()
-        srct_bos_token_id = tp.bos_token_id()
 
     print(datetime.datetime.now(), "Reading source lines!")
     with open(src_txt_file, "r") as s_fp:
@@ -42,6 +38,20 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file:
     print(datetime.datetime.now(), "Reading target lines!")
     with open(dst_txt_file, "r") as d_fp:
         dst_lines = list(map(lambda x: x.strip(), d_fp))
+    print("Number of parallel sentences:", len(dst_lines))
+
+    if lang_lines_path:
+        print(datetime.datetime.now(), 'Reading language lines!')
+        with open(lang_lines_path, 'r') as l_fp:
+            lang_lines = list(map(lambda x: x.strip(), l_fp))
+        lang2id = {}
+        src_bos_ids = [get_token_id(x, tp, lang2id) for x in lang_lines]
+        # language genus of 'en' is <Germanic>
+        dst_bos_ids = [get_token_id('<Germanic>', tp, lang2id)] * len(lang_lines)
+    else:
+        print('Not using language lines!')
+        bos_id = tp.bos_token_id()
+        src_bos_ids = dst_bos_ids = [bos_id] * len(src_lines)
 
     print(datetime.datetime.now(), "Reading source-translitered lines!")
     if srct_txt_file is None:
@@ -51,16 +61,21 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file:
             srct_lines = list(map(lambda x: x.strip(), st_fp))
 
     assert len(src_lines) == len(dst_lines) == len(srct_lines)
-    print(datetime.datetime.now(), "Number of parallel sentences:", len(dst_lines))
-    if shallow:
-        src_ids = [encoding.ids for encoding in tp.tokenizer.encode_batch(src_lines)]
-    else:
-        src_ids = tokenizer.batch_encode_plus(src_lines).data['input_ids']
-    dst_ids = [[dst_bos_token_id] + encoding.ids + [tp.sep_token_id()] for encoding in
-               tp.tokenizer.encode_batch(dst_lines)]
-    srct_ids = [[srct_bos_token_id] + encoding.ids + [tp.sep_token_id()] for encoding in
-                tp.tokenizer.encode_batch(srct_lines)]
+    if lang_lines_path:
+        assert len(lang_lines) == len(src_lines)
 
+    print(datetime.datetime.now(), "Encoding source lines!")
+    if shallow:
+        src_ids = [encoding.ids for encoding in tqdm(tp.tokenizer.encode_batch(src_lines))]
+    else:
+        src_ids = tokenizer.batch_encode_plus(tqdm(src_lines)).data['input_ids']
+
+    print(datetime.datetime.now(), "Encoding dest lines!")
+    dst_ids = [[dst_bos_id] + encoding.ids + [tp.sep_token_id()] for dst_bos_id, encoding in
+                zip(dst_bos_ids, tqdm(tp.tokenizer.encode_batch(dst_lines)))]
+    print(datetime.datetime.now(), "Encoding source-translitered lines!")
+    srct_ids = [[srct_bos_id] + encoding.ids + [tp.sep_token_id()] for srct_bos_id, encoding in
+                zip(src_bos_ids, tqdm(tp.tokenizer.encode_batch(srct_lines)))]
     print(datetime.datetime.now(), "Getting example lengths!")
     example_length = dict(map(lambda e: (e[0], len(e[1])), enumerate(src_ids)))
     print(datetime.datetime.now(), "Sorting example lengths!")
@@ -88,7 +103,8 @@ def get_options():
     parser.add_option("--min_seq_len", dest="min_seq_len", help="Max sequence length", type="int", default=1)
     parser.add_option("--shallow", action="store_true", dest="shallow_encoder",
                       help="Use shallow encoder instead of XLM", default=False)
-    parser.add_option("--lang", dest="lang_path", help="path to language info file", default='')
+    parser.add_option("--lang", dest="lang_lines_path", default='',
+            help="path to file with language family IDs for each example in --dst")
     (options, args) = parser.parse_args()
     return options
 
@@ -99,4 +115,4 @@ if __name__ == "__main__":
 
     write(tp=tokenizer, output_file=options.output_path, src_txt_file=options.src_data_path,
           srct_txt_file=options.srct_data_path, dst_txt_file=options.dst_data_path,
-          shallow=options.shallow_encoder, lang_path=options.lang_path)
+          shallow=options.shallow_encoder, lang_lines_path=options.lang_lines_path)
