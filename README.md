@@ -124,7 +124,7 @@ __2. Train machine translation:__
  --model sample/mt_model  --train_mt sample/fa2en.train.mt \
  --capacity 600 --batch 4000   --beam 4 --step 500000 --warmup 4000 \
  --lr 0.0001  --dev_mt sample/fa2en.dev.mt \
- --dropout 0.1 --fp16 --multi
+ --dropout 0.1 --multi
 ```
 
 After you are done, you can use the model path ``sample/mt_model`` for translating text to English (similar to [the section on using the pretrained models in our paper](#translation).
