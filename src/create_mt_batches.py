@@ -46,8 +46,11 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file:
             lang_lines = list(map(lambda x: x.strip(), l_fp))
         lang2id = {}
         src_bos_ids = [get_token_id(x, tp, lang2id) for x in lang_lines]
+
         # language genus of 'en' is <Germanic>
-        dst_bos_ids = [get_token_id('<Germanic>', tp, lang2id)] * len(lang_lines)
+        # dst_bos_ids = [get_token_id('<Germanic>', tp, lang2id)] * len(lang_lines)
+        # bos_id = tp.bos_token_id()
+        # dst_bos_ids = [bos_id] * len(src_lines)
     else:
         print('Not using language lines!')
         bos_id = tp.bos_token_id()
@@ -71,8 +74,8 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file:
         src_ids = tokenizer.batch_encode_plus(tqdm(src_lines)).data['input_ids']
 
     print(datetime.datetime.now(), "Encoding dest lines!")
-    dst_ids = [[dst_bos_id] + encoding.ids + [tp.sep_token_id()] for dst_bos_id, encoding in
-                zip(dst_bos_ids, tqdm(tp.tokenizer.encode_batch(dst_lines)))]
+    dst_ids = [[tp.bos_token_id()] + encoding.ids + [tp.sep_token_id()] for encoding in
+                tqdm(tp.tokenizer.encode_batch(dst_lines))]
     print(datetime.datetime.now(), "Encoding source-translitered lines!")
     srct_ids = [[srct_bos_id] + encoding.ids + [tp.sep_token_id()] for srct_bos_id, encoding in
                 zip(src_bos_ids, tqdm(tp.tokenizer.encode_batch(srct_lines)))]

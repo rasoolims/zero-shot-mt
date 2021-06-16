@@ -84,6 +84,23 @@
     "Samples_200": false,
     "Country_ID": "ET"
   },
+  "ar": {
+    "ID": "ams",
+    "Name": "Arabic (Modern Standard)",
+    "Macroarea": "Eurasia",
+    "Latitude": 25.0,
+    "Longitude": 42.0,
+    "Glottocode": "stan1318",
+    "ISO639P3code": "arb",
+    "Family": "Afro-Asiatic",
+    "Subfamily": NaN,
+    "Genus": "Semitic",
+    "GenusIcon": "cdd0000",
+    "ISO_codes": "arb",
+    "Samples_100": false,
+    "Samples_200": false,
+    "Country_ID": "KW SO SY OM QA EG TN MA LY KM JO LB ER YE SA IQ PS DZ AE BH SD IL"
+  },
   "hy": {
     "ID": "arm",
     "Name": "Armenian (Eastern)",
