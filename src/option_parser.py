@@ -52,4 +52,5 @@ def get_mt_options_parser():
                       help="Use shallow encoder instead of XLM", default=False)
     parser.add_option("--multi", action="store_true", dest="multi_stream",
                       help="Using multi-stream model (the batches should be built via multi-stream)", default=False)
+    parser.add_option("--load-separate-train", action="store_true", dest="load_separate_train", default=False)
     return parser

@@ -316,6 +316,8 @@ class Trainer:
     def get_mt_train_data(mt_model, num_processors, options, pin_memory: bool):
         mt_train_loader = []
         train_paths = options.mt_train_path.split(",")
+        if options.load_separate_train:
+            train_paths = [train_paths[options.local_rank]]
         for train_path in train_paths:
             mt_train_data = dataset.MTDataset(batch_pickle_dir=train_path,
                                               max_batch_capacity=int(num_processors * options.total_capacity / 2),
@@ -323,7 +325,8 @@ class Trainer:
                                               src_pad_idx=mt_model.src_pad_id(),
                                               dst_pad_idx=mt_model.text_processor.pad_token_id(),
                                               keep_src_pad_idx=False)
-            sampler = None if options.local_rank < 0 else DistributedSampler(mt_train_data, rank=options.local_rank)
+            sampler = None if (options.local_rank < 0 or options.load_separate_train) \
+                else DistributedSampler(mt_train_data, rank=options.local_rank)
             mtl = data_utils.DataLoader(mt_train_data, sampler=sampler,
                                         batch_size=1, shuffle=(options.local_rank < 0), pin_memory=pin_memory)
             mt_train_loader.append(mtl)
