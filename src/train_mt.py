@@ -64,7 +64,7 @@ class Trainer:
 
     def train_epoch(self, step: int, saving_path: str = None, mt_dev_iter: List[data_utils.DataLoader] = None,
                     mt_train_iter: List[data_utils.DataLoader] = None, max_step: int = 300000, accum=1,
-                    save_opt: bool = False,
+                    save_opt: bool = False, eval_steps: int = 5000,
                     **kwargs):
         "Standard Training and Logging Function"
         start = time.time()
@@ -88,7 +88,6 @@ class Trainer:
                         # Second stream of data in case of multi-stream processing.
                         srct_inputs = batch["srct_texts"].squeeze(0)
                         srct_mask = batch["srct_pad_mask"].squeeze(0)
-                        import pdb; pdb.set_trace()
 
                         if src_inputs.size(0) < self.num_gpu:
                             continue
@@ -126,7 +125,7 @@ class Trainer:
                               "Epoch Step: %d Loss: %f Tokens per Sec: %f " % (
                                   step, cur_loss / tokens, tokens / elapsed))
 
-                        if mt_dev_iter is not None and step % 5000 == 0:
+                        if mt_dev_iter is not None and step % eval_steps == 0:
                             bleu = self.eval_bleu(mt_dev_iter, saving_path)
                             print("BLEU:", bleu)
 
@@ -283,7 +282,8 @@ class Trainer:
             print(trainer.rank, "--> train epoch", train_epoch)
             step = trainer.train_epoch(mt_train_iter=mt_train_loader, max_step=options.step,
                                        mt_dev_iter=mt_dev_loader, saving_path=options.model_path, step=step,
-                                       save_opt=options.save_opt, accum=options.accum)
+                                       save_opt=options.save_opt, accum=options.accum,
+                                       eval_steps=options.eval_steps)
             train_epoch += 1
 
     @staticmethod
@@ -319,6 +319,7 @@ class Trainer:
         train_paths = options.mt_train_path.split(",")
         if options.load_separate_train:
             train_paths = [train_paths[options.local_rank]]
+            print(f'loading {train_paths[0]} on this device')
         for train_path in train_paths:
             mt_train_data = dataset.MTDataset(batch_pickle_dir=train_path,
                                               max_batch_capacity=int(num_processors * options.total_capacity / 2),
