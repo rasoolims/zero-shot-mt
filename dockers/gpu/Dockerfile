@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:1.4-cuda10.1-cudnn7-devel
+FROM pytorch/pytorch:1.8.1-cuda10.2-cudnn7-devel
 LABEL maintainer="Mohammad Sadegh Rasooli"
 LABEL repository="root_mt"
 
@@ -16,12 +16,11 @@ RUN apt update && \
 
 RUN apt-get update && apt-get -y install openssh-client
 RUN python3 -m pip install --no-cache-dir --upgrade pip
-RUN python3 -m pip install torch==1.4.0
+RUN python3 -m pip install torch==1.8.1
 RUN python3 -m pip install numpy==1.18.2
 RUN python3 -m pip install sacrebleu
 RUN python3 -m pip install future==0.18.2
 RUN python3 -m pip install pillow
-RUN python3 -m pip install torchvision==0.5.0
 RUN python3 -m pip install ipython
 RUN python3 -m pip install transformers==4.5.1
 RUN python3 -m pip install pandas
@@ -50,14 +49,6 @@ COPY dataset_prep /root/zero-shot-mt/dataset_prep
 COPY mt_pret /root/zero-shot-mt/mt_pret
 
 WORKDIR /root/
-# uninstall Apex if present, twice to make absolutely sure :)
-RUN python3 -m pip uninstall -y apex || :
-RUN python3 -m pip uninstall -y apex || :
-# SHA is something the user can touch to force recreation of this Docker layer,
-# and therefore force cloning of the latest version of Apex
-RUN SHA=ToUcHMe git clone https://github.com/NVIDIA/apex.git
-WORKDIR /root/apex/
-RUN python3 -m pip install --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" pytorch-extension
 
 WORKDIR /root/zero-shot-mt/
 
