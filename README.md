@@ -116,14 +116,14 @@ python create_mt_batches.py --tok sample/tok/ --src sample/dev.fa \
 
 ```
 
-If you create translation data in multiple direction, you can train multilingual translation for which we learn translation from multiple directions. Multiple data files can be separated by ``,`` in the arguments both for ``--train_mt`` and ``--dev_mt`` options.
+If you create translation data in multiple direction, you can train multilingual translation for which we learn translation from multiple directions. Multiple data files can be separated by ``,`` in the arguments both for ``--train`` and ``--dev`` options.
 
 __2. Train machine translation:__
 ```
  CUDA_VISIBLE_DEVICES=0 python3 -u train_mt.py --tok  sample/tok/ \
- --model sample/mt_model  --train_mt sample/fa2en.train.mt \
+ --model sample/mt_model  --train sample/fa2en.train.mt \
  --capacity 600 --batch 4000   --beam 4 --step 500000 --warmup 4000 \
- --lr 0.0001  --dev_mt sample/fa2en.dev.mt \
+ --lr 0.0001  --dev sample/fa2en.dev.mt \
  --dropout 0.1 --multi
 ```
 
