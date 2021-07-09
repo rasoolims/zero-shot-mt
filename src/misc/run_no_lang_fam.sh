@@ -26,8 +26,6 @@ cat ar-dev/dev.tok.ar gu-dev/dev.tok.gu kk-dev/dev.tok.kk ro-dev/dev.tok.ro > /s
 cat ar-dev/dev.tok.en gu-dev/dev.tok.en kk-dev/dev.tok.en ro-dev/dev.tok.en > /scratch/bryanli/zsmt/dev/en
 python scripts/icu_transliterate.py /scratch/bryanli/zsmt/dev/src /scratch/bryanli/zsmt/dev/srct
 
-python create_mt_batches.py --tok /scratch/bryanli/zsmt/tok_best --src /scratch/bryanli/zsmt/dev/src --srct /scratch/bryanli/zsmt/dev/srct --dst /scratch/bryanli/zsmt/dev/en --output /scratch/bryanli/zsmt/output/src2en.dev.mt --lang /scratch/bryanli/zsmt/dev/lang_fam.txt
-
 python create_mt_batches.py --tok /scratch/bryanli/zsmt/tok_best_no_lang_fam --src /scratch/bryanli/zsmt/dev/src --srct /scratch/bryanli/zsmt/dev/srct --dst /scratch/bryanli/zsmt/dev/en --output /scratch/bryanli/zsmt/output/src2en.dev.no_lang_fam.mt
 
 # start training
