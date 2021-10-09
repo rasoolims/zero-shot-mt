@@ -38,3 +38,6 @@ python create_mt_batches.py --tok /scratch/bryanli/zsmt/tok_best --src /scratch/
 
 # start training
 CUDA_VISIBLE_DEVICES=0 python -u train_mt.py --tok /scratch/bryanli/zsmt/tok_best --model /scratch/bryanli/zsmt/model_lang_fam --train /scratch/bryanli/zsmt/output/src2en.train.mt.split1 --dev /scratch/bryanli/zsmt/output/src2en.dev.mt --batch 20000 --capacity 1000 --step 12500000 --fp16 --multi &| tee log.txt
+
+# translate
+CUDA_VISIBLE_DEVICES=4 python -u translate.py --tok /scratch/bryanli/zsmt/tok_best --model /scratch/bryanli/zsmt/model_lang_fam --input /scratch/bryanli/zsmt/dev/src --input2 /scratch/bryanli/zsmt/dev/srct --output /scratch/bryanli/zsmt/model_lang_fam/dev_translated.en --lang /scratch/bryanli/zsmt/dev/lang_fam.txt

@@ -30,3 +30,5 @@ python create_mt_batches.py --tok /scratch/bryanli/zsmt/tok_best_no_lang_fam --s
 
 # start training
 CUDA_VISIBLE_DEVICES=1 python3 -u train_mt.py --tok /scratch/bryanli/zsmt/tok_best_no_lang_fam --model /scratch/bryanli/zsmt/model_no_lang_fam --train /scratch/bryanli/zsmt/output/src2en.train.no_lang_fam.mt.split1 --dev /scratch/bryanli/zsmt/output/src2en.dev.no_lang_fam.mt --batch 15000 --capacity 1200 --step 12500000 --multi --eval-steps 25000|& tee log_no_lang_fam.txt
+
+CUDA_VISIBLE_DEVICES=6 python -u translate.py --tok /scratch/bryanli/zsmt/tok_best_no_lang_fam --model /scratch/bryanli/zsmt/model_no_lang_fam --input /scratch/bryanli/zsmt/dev/src --input2 /scratch/bryanli/zsmt/dev/srct --output /scratch/bryanli/zsmt/model_no_lang_fam/dev_translated.en

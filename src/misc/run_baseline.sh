@@ -25,3 +25,8 @@ python create_mt_batches.py --tok /scratch/bryanli/zsmt/tok_baseline --src /scra
 
 # start training
 CUDA_VISIBLE_DEVICES=1 python3 -u train_mt.py --tok /scratch/bryanli/zsmt/tok_baseline --model /scratch/bryanli/zsmt/model_baseline --train /scratch/bryanli/zsmt/output/src2en.train.baseline.mt.split1 --dev /scratch/bryanli/zsmt/output/src2en.dev.baseline.mt --batch 15000 --capacity 1200 --step 12500000 --eval-steps 25000|& tee log_baseline.txt
+
+CUDA_VISIBLE_DEVICES=7 python -u translate.py --tok /scratch/bryanli/zsmt/tok_baseline --model /scratch/bryanli/zsmt/model_baseline --input /scratch/bryanli/zsmt/dev/src --output /scratch/bryanli/zsmt/model_baseline/dev_translated.en
+
+# debugging
+CUDA_VISIBLE_DEVICES=1 python3 -u train_mt.py --tok /scratch/bryanli/zsmt/tok_baseline --model /scratch/bryanli/zsmt/model_baseline_test_orig --train /scratch/bryanli/zsmt/output/src2en.dev.baseline.mt --dev /scratch/bryanli/zsmt/output/src2en.dev.baseline.mt --batch 15000 --capacity 1200 --step 12500000 --eval-steps 25000
