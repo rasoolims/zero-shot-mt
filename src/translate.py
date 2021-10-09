@@ -114,8 +114,8 @@ def build_data_loader(options, text_processor):
                     print(i, end="\r")
     print("\n", datetime.datetime.now(), "Loaded %f examples", (len(examples)))
     test_data = dataset.MTDataset(examples=examples, max_batch_capacity=options.total_capacity, max_batch=options.batch,
-                                  src_pad_idx=text_processor.pad_token_id(),
-                                  dst_pad_idx=text_processor.pad_token_id() if options.shallow else input_tokenizer.pad_token_id,
+                                  dst_pad_idx=text_processor.pad_token_id(),
+                                  src_pad_idx=text_processor.pad_token_id() if options.shallow else input_tokenizer.pad_token_id,
                                   max_seq_len=10000)
     pin_memory = torch.cuda.is_available()
     examples = None  # Make sure it gets collected
