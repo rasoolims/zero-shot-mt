@@ -98,13 +98,15 @@ def make_lang_json(wals_path):
     # need to add languages only contained in Wikimatrix
     lang_d['eo'] = dict(Name='Esperanto', Genus="Esperanto")
     lang_d['io'] = dict(Name='Ido', Genus="Esperanto")
-    lang_d['la'] = dict(Name='Latin', Genus="Romance")
+    lang_d['la'] = dict(Name='Latin', Genus="Romance", ISO639P3code='lat')
     lang_d['lmo'] = dict(Name='Lombard', Genus="Romance")
     lang_d['mwl'] = dict(Name='Mirandese', Genus="Romance")
     lang_d['nds_nl'] = lang_d['nds']
     lang_d['sh'] = lang_d['hr']
-    lang_d['sr'] = lang_d['hr']
+    lang_d['sr'] = lang_d['hr'].copy()
+    lang_d['sr']['ISO639P3code'] = 'srp'
     lang_d['simple'] = lang_d['en']
+    lang_d['az']['ISO639P3code'] = 'aze'
 
     lang_d['ja']['Genus'] = 'Japanese'
     lang_d['ko']['Genus'] = 'Korean'

@@ -153,7 +153,6 @@ class Seq2Seq(nn.Module):
             srct_inputs = srct_inputs.to(device)
         if self.multi_stream and srct_mask.device != device:
             srct_mask = srct_mask.to(device)
-
         encoder_states, shallow_encoder_states = self.encode(src_inputs, src_mask, srct_inputs=srct_inputs,
                                                              srct_mask=srct_mask)
 

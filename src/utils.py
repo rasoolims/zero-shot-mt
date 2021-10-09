@@ -4,6 +4,17 @@ import torch
 import torch.optim as optim
 
 
+def get_token_id(lang, tp, d):
+    """
+    Get token id faster by caching results in `d`
+    """
+    token_id = d.get(lang)
+    if not token_id:
+        token_id = tp.token_id(lang)
+        d[lang] = token_id
+    return token_id
+
+
 def build_optimizer(model, learning_rate, warump_steps):
     return AdamInverseSqrtWithWarmup(model.parameters(), lr=learning_rate, betas=(0.9, 0.98),
                                      warmup_updates=warump_steps)

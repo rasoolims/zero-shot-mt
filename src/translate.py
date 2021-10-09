@@ -10,7 +10,8 @@ import dataset
 from seq2seq import Seq2Seq
 from seq_gen import BeamDecoder, get_outputs_until_eos
 
-from lang_info import get_langs_d
+from utils import get_token_id
+
 
 def get_lm_option_parser():
     parser = OptionParser()
@@ -30,7 +31,8 @@ def get_lm_option_parser():
     parser.add_option("--len-penalty", dest="len_penalty_ratio", help="Length penalty", type="float", default=0.8)
     parser.add_option("--capacity", dest="total_capacity", help="Batch capacity", type="int", default=600)
     parser.add_option("--shallow", action="store_true", dest="shallow", default=False)
-    parser.add_option("--lang", dest="lang_path", help="path to language info file", default='')
+    parser.add_option("--lang", dest="lang_lines_path", default='',
+            help="path to file with language family IDs for each input example")
     return parser
 
 
@@ -45,7 +47,6 @@ def translate_batch(batch, generator, text_processor, verbose=False):
     if verbose:
         src_ids = get_outputs_until_eos(generator.seq2seq_model.src_eos_id(), src_inputs, remove_first_token=True)
         src_text = list(map(lambda src: generator.seq2seq_model.decode_src(src), src_ids))
-
     with autocast():
         outputs = generator(src_inputs=src_inputs, src_sizes=src_pad_idx,
                             srct_inputs=srct_inputs, srct_mask=srct_mask,
@@ -63,16 +64,20 @@ def build_data_loader(options, text_processor):
     else:
         input_tokenizer = text_processor
 
-    src = options.src or options.input.rsplit('.', 1)[-1]
-
     langs = {}
-    if options.lang_path:
-        print('Loading languages dict...')
-        langs = get_langs_d(options.lang_path)
-        src_bos_token_id = text_processor.token_id(langs[src])
+    if options.lang_lines_path:
+        print(datetime.datetime.now(), 'Reading language lines!')
+        with open(options.lang_lines_path, 'r') as l_fp:
+            lang_lines = list(map(lambda x: x.strip(), l_fp))
+        lang2id = {}
+        src_bos_ids = [get_token_id(x, text_processor, lang2id) for x in lang_lines]
     else:
         print('Not using languages dict')
-        src_bos_token_id = text_processor.bos_token_id()
+        bos_id = text_processor.bos_token_id()
+        # count number of lines (could be more efficient?)
+        with open(options.input_path, "r") as s_fp:
+            num_lines = sum(1 for _ in s_fp)
+        src_bos_ids = [bos_id] * num_lines
 
 
     print(datetime.datetime.now(), "Binarizing test data")
@@ -80,29 +85,29 @@ def build_data_loader(options, text_processor):
     examples = []
     if options.second_input_path is not None:
         with open(options.input_path, "r") as s_fp, open(options.second_input_path, "r") as s2_fp:
-            for i, (src_line, srct_line) in enumerate(zip(s_fp, s2_fp)):
+            for i, (src_line, srct_line, bos_id) in enumerate(zip(s_fp, s2_fp, src_bos_ids)):
                 if len(src_line.strip()) == 0: continue
                 if not options.shallow:
                     src_tok_line = input_tokenizer.encode(src_line.strip())
                 else:
                     src_tok_line = text_processor._tokenize(src_line.strip())
-                    src_tok_line = [src_bos_token_id] + src_tok_line.ids + [text_processor.sep_token_id()]
+                    src_tok_line = [bos_id] + src_tok_line.ids + [text_processor.sep_token_id()]
 
                 srct_tok_line = text_processor._tokenize(srct_line.strip())
-                srct_tok_line = [src_bos_token_id] + srct_tok_line.ids + [text_processor.sep_token_id()]
+                srct_tok_line = [bos_id] + srct_tok_line.ids + [text_processor.sep_token_id()]
 
                 examples.append((src_tok_line, fixed_output, srct_tok_line))
                 if i % 10000 == 0:
                     print(i, end="\r")
     else:
         with open(options.input_path, "r") as s_fp:
-            for i, src_line in enumerate(s_fp):
+            for i, (src_line, bos_id) in enumerate(zip(s_fp, src_bos_ids)):
                 if len(src_line.strip()) == 0: continue
                 if not options.shallow:
                     src_tok_line = input_tokenizer.encode(src_line.strip())
                 else:
                     src_tok_line = text_processor._tokenize(src_line.strip())
-                    src_tok_line = [src_bos_token_id] + src_tok_line.ids + [text_processor.sep_token_id()]
+                    src_tok_line = [bos_id] + src_tok_line.ids + [text_processor.sep_token_id()]
 
                 examples.append((src_tok_line, fixed_output, src_tok_line))
                 if i % 10000 == 0:
@@ -131,7 +136,9 @@ def build_model(options):
 if __name__ == "__main__":
     parser = get_lm_option_parser()
     (options, args) = parser.parse_args()
+    print('building model...')
     generator, text_processor = build_model(options)
+    print('building dataloader...')
     test_loader = build_data_loader(options, text_processor)
     sen_count = 0
     with open(options.output_path, "w") as writer:

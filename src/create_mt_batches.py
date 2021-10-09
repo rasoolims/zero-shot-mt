@@ -8,16 +8,7 @@ from tqdm import tqdm
 from transformers import XLMRobertaTokenizer
 
 from textprocessor import TextProcessor
-
-def get_token_id(lang, tp, d):
-    """
-    Get token id faster by caching results in `d`
-    """
-    token_id = d.get(lang)
-    if not token_id:
-        token_id = tp.token_id(lang)
-        d[lang] = token_id
-    return token_id
+from utils import get_token_id
 
 def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file: str = None,
           dst_txt_file: str = None, shallow: bool = False, lang_lines_path: Optional[str] = None):
@@ -46,15 +37,10 @@ def write(tp: TextProcessor, output_file: str, src_txt_file: str, srct_txt_file:
             lang_lines = list(map(lambda x: x.strip(), l_fp))
         lang2id = {}
         src_bos_ids = [get_token_id(x, tp, lang2id) for x in lang_lines]
-
-        # language genus of 'en' is <Germanic>
-        # dst_bos_ids = [get_token_id('<Germanic>', tp, lang2id)] * len(lang_lines)
-        # bos_id = tp.bos_token_id()
-        # dst_bos_ids = [bos_id] * len(src_lines)
     else:
         print('Not using language lines!')
         bos_id = tp.bos_token_id()
-        src_bos_ids = dst_bos_ids = [bos_id] * len(src_lines)
+        src_bos_ids = [bos_id] * len(src_lines)
 
     print(datetime.datetime.now(), "Reading source-translitered lines!")
     if srct_txt_file is None:

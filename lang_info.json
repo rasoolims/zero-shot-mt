@@ -159,7 +159,7 @@
     "Latitude": 40.5,
     "Longitude": 48.5,
     "Glottocode": NaN,
-    "ISO639P3code": NaN,
+    "ISO639P3code": "aze",
     "Family": "Altaic",
     "Subfamily": NaN,
     "Genus": "Turkic",
@@ -2474,7 +2474,8 @@
   },
   "la": {
     "Name": "Latin",
-    "Genus": "Romance"
+    "Genus": "Romance",
+    "ISO639P3code": "lat"
   },
   "lmo": {
     "Name": "Lombard",
@@ -2525,7 +2526,7 @@
     "Latitude": 44.0,
     "Longitude": 19.0,
     "Glottocode": "sout1528",
-    "ISO639P3code": NaN,
+    "ISO639P3code": "srp",
     "Family": "Indo-European",
     "Subfamily": NaN,
     "Genus": "Slavic",
